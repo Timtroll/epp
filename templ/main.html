@@ -1,0 +1,86 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<title><%title%></title>
+<link href="<%public_css%>/style.css" rel="stylesheet" type="text/css" />
+<style>
+html, body {
+	width: 100%;
+	height: 100%; 
+	font-family: Verdana, Arial, Helvetica, sans-serif;
+	font-size: 14px;
+	margin: 0;
+	padding: 0;
+}
+th {
+	height: 30px;
+	width: 2%;
+	text-align: center;
+	font-size: 12px;
+	font-style: normal;
+	font-family: Verdana, Arial, Helvetica, sans-serif;
+}
+.modal {
+	background-image: url('<%public_css%>/spiner.gif');
+	background-position: center;
+	background-repeat: no-repeat;
+}
+.mailframe {
+	width: 24px;
+	height: 24px;
+	border: 0; 
+	display: block;
+	background-color: #ffffff;
+}
+</style>
+<%javascript%>
+<script src="<%public_css%>/domain_info.js"></script>
+</head>
+<body>
+<table width="998"  height="100%" border="0" align="center" cellpadding="5" cellspacing="5" style="height:100%">
+  <tr>
+    <td height="1%">
+	 <table width="100%" border="0" align="center">
+      <tr>
+       <td width="40" align="left" valign="middle"><div class="pref" onclick="javascript:void(0);" tabindex="1"><div class="line"></div><div class="line"></div><div class="line"></div></div>
+   <div class="smenu">
+    <form action="<%public_cgi%>" id="menu_form" method="post"><%menu%></form>
+   </div>
+</td>
+<%query%>
+       <td width="40" align="right" valign="middle"><div id="dd"></div></td>
+       <td width="40" align="right" valign="middle"><a href="#" onclick="javascript:document.location.href='<%public_cgi%>?logout=1';"><img src="<%public_css%>/logout.png" width="24" height="24" align="right"  class="logout"/></a></td>
+	  </tr>
+	 </table>
+  </td>
+  </tr>
+  <tr>
+    <td height="1%"><%path%><%comment%><div class="message" id="message"><%messages%></div></td>
+  </tr>
+  <tr>
+    <td valign="top"><%content%></td>
+  </tr>
+</table>
+<div id="modalopen" class="win">
+  <div id="int">
+    <a href="#close" title="Закрыть" class="close">X</a>
+    <span id="modalframe"></span>
+  </div>
+</div>
+<div id="command_fields" style="display:none;"></div>
+<script>
+var txt='Это текст из JavaScript main';
+get_mail();
+reloadIt();
+//setTimeout("document.getElementById('dd').innerHTML = frames['mymail'].txt2",1000);
+function reloadIt() {
+	document.getElementById("mymail").src='<%public_cgi%>?get_mail=1';
+	setTimeout("reloadIt()",60000);
+}
+function get_mail (url) {
+	window.document.getElementById('dd').innerHTML = "<iframe class='mailframe' name='mymail' id='mymail' frameBorder='0' style='border: 0; display: block; width: 26px; height: 26px'></iframe>"
+}
+  </script>
+ </body>
+</html>

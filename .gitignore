@@ -1,0 +1,6 @@
+*.swp
+*.log
+*.LOG
+*.txt
+/moadmin.php
+/drs.pm

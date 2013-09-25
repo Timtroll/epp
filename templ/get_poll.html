@@ -1,0 +1,39 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+</head>
+<style>
+html, body {
+	width: 100%;
+	height: 100%; 
+	margin: 0;
+	padding: 0;
+}
+.mail {
+	width: 24px;
+	height: 24px;
+	float: right;
+	margin-top:1px;
+	background-image: url('<%public_css%>/mail.png');
+}
+.nmail {
+	width: 24px;
+	height: 24px;
+	float: right;
+	margin-top:1px;
+	background-image: url('<%public_css%>/new_mail.png');
+}
+</style>
+<body>
+ <a href="<%public_cgi%>?poll=1" target="_parent"><div id="mail" class="mail"></div></a>
+ <input type="hidden" name="poll" id="poll" value="<%poll%>"></div>
+ <script>
+ if (document.getElementById('poll').value == 'new') {
+ document.getElementById('mail').className = 'nmail';
+ }
+ else if (document.getElementById('poll').value == 'old') {
+ document.getElementById('mail').className = 'mail';
+ }
+ </script>
+</body>
+</html>

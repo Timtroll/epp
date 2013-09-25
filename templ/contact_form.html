@@ -1,0 +1,98 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<title>Untitled Document</title>
+</head>
+<body>
+<link href="http://localhost/domain/css/style.css" rel="stylesheet" type="text/css" />
+<style>
+html, body {
+	width: 100%;
+	height: 100%; 
+	font-family: Verdana, Arial, Helvetica, sans-serif;
+	font-size: 14px;
+	margin: 0;
+	padding: 0;
+}
+th {
+	height: 30px;
+	width: 2%;
+	text-align: center;
+	font-size: 12px;
+	text-style: normal;
+	font-family: Verdana, Arial, Helvetica, sans-serif;
+}
+iframe {
+	background-image: url(http://localhost/domain/css/spiner.gif);
+	background-position: center;
+	background-repeat: no-repeat;
+}
+</style>
+<script language="JavaScript" src="http://localhost/domain/css/country.js" type="text/javascript"></script>
+<table width="100%" border="0" cellpadding="2" cellspacing="2" onclick="javascript:CloseCon();">
+  <tr>
+    <td>Country:</td>
+    <td><table width="100%" border="0" cellpadding="2" cellspacing="2">
+        <tr>
+          <td width="5%"><input class="wdth" name="cc" id="cc" type="text" size="4" maxlength="2" onkeyup="javascript:chkChar(this);Country();"/></td>
+          <td width="1">&nbsp;</td>
+          <td><div id="countr_none">Латинская аббревиатура (например RU)</div>
+              <div id="country" class="country"></div></td>
+        </tr>
+      </table>
+        <div class="country-none" id="countr_list"></div></td>
+  </tr>
+ <tbody>
+  <tr>
+   <td width="15%">ID:</td>
+   <td width="85%"><input class="wdth" type="text" name="clID" /></td>
+   </tr>
+  <tr>
+   <td width="15%">Name:</td>
+   <td width="85%"><input class="wdth" type="text" name="name" /></td>
+   </tr>
+  <tr>
+   <td width="15%">Org:</td>
+   <td width="85%"><input class="wdth" type="text" name="org" /></td>
+   </tr>
+  <tr>
+   <td width="15%">Email:</td>
+   <td width="85%"><input class="wdth" type="text" name="email" /></td>
+   </tr>
+  <tr>
+   <td width="15%">Voice:</td>
+   <td width="85%"><input class="wdth" type="text" name="voice" /></td>
+   </tr>
+  <tr>
+   <td width="15%">Fax</td>
+   <td width="85%"><input class="wdth" type="text" name="fax" /></td>
+   </tr>
+  <tr>
+    <td width="15%">Postal code:</td>
+    <td width="85%"><input class="wdth" type="text" name="pc" /></td>
+    </tr>
+  <tr>
+    <td width="15%">State/Province:</td>
+    <td width="85%"><input class="wdth" type="text" name="sp" /></td>
+    </tr>
+  <tr>
+    <td width="15%">City:</td>
+    <td width="85%"><input class="wdth" type="text" name="city" /></td>
+    </tr>
+  <tr>
+    <td width="15%">Street:</td>
+    <td width="85%"><textarea name="street" rows="3" cols="40" class="wdth"></textarea></td>
+    </tr>
+  <tr>
+    <td width="15%">Close information</td>
+    <td width="85%"><input type="checkbox" name="disclose" value="1" /></td>
+    </tr>
+  <tr>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+  </tr>
+ </tbody>
+</table>
+</body>
+</html>
