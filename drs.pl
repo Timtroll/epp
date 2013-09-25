@@ -191,7 +191,6 @@ sub domain_renew {
 	}
 # print "=";
 # print &sec2date(&date2sec($tmp[0]->{'exDate'}), 'date');
-# print "=";
 # exit;
 	# Create renew object
 	$renew = {
