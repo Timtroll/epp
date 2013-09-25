@@ -2,5 +2,9 @@
 *.log
 *.LOG
 *.txt
+/list.pl
+/price.pl
+/cal.pl
+/zones.pl
 /moadmin.php
 /drs.pm
