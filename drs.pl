@@ -561,11 +561,11 @@ sub info_table {
 	$flag = shift;
 
 	if ($info) {
-		unless (exists $info->{'_id'}) {
+#		unless (exists $info->{'_id'}) {
 #			$info = &obj2utf($info);
-		}
+#		}
 
-		$out = '<ul class="dump" style="margin:0;">';
+		$out = '<ul class="dump">';
 		foreach (sort {$a cmp $b} keys %{$info}) {
 			if (/^_id$/) { next; }
 			elsif (/^response$/) { next; }
@@ -577,14 +577,16 @@ sub info_table {
 				$out .= &print_array($info->{$_}, $_, $flag);
 			}
 			else {
-			$out .= "<li><span>$_ :</span>";
 				if ($flag) {
+					$out .= "<li>";
 					$out .= "<input type='text' class='dump-edit' name='$_' value='".$info->{$_}."'>";
+					$out .= "<i>$_ :</i></li>";
 				}
 				else {
-					$out .= $info->{$_};
+					$out .= "<li><i>$_ :</i>";
+					$out .= "<span class='dump-text'>".$info->{$_}."</span>";
+					$out .= "</li>";
 				}
-			$out .= "</li>";
 			}
 		}
 		$out .= '</ul>';
@@ -598,7 +600,7 @@ sub print_hash {
 	$name = shift;
 	$flag = shift;
 
-	$out = "<li><span id='dump_span'>$name :</span></li><ul>";
+	$out = "<li><i id='dump_span'>$name :</i></li><ul>";
 	foreach (sort {$a cmp $b} keys %{$info}) {
 		if (ref($info->{$_}) eq 'HASH') {
 			$out .= &print_hash($info->{$_}, $_, $flag);
@@ -607,19 +609,21 @@ sub print_hash {
 			$out .= &print_array($info->{$_}, $_, $flag);
 		}
 		else {
-			$out .= "<li><span>$_ :</span>";
 			if ($flag) {
+				$out .= "<li>";
 				if (/^cc$/) {
-					$out .= "<table width='70%' border='0' cellpadding='0' cellspacing='0' align='right'><tr><td width='7%'><input class='dump-edit' name='".$name."_$_"."' id='".$name."_$_"."' type='text' size='4' maxlength='2' onkeyup='javascript:chkChar(this);Country();' value='".$info->{$_}."'><div class='country-none' id='countr_list'></div></td><td width='20'>&nbsp;</td><td class='cntr'><div id='countr_none'>Латинская аббревиатура (например RU)</div><div id='country' class='country'></div></td></tr></table>";
+					$out .= "<table width='70%' border='0' cellpadding='0' cellspacing='0' align='right'><tr><td width='8%'><input class='dump-edit' name='".$name."_$_"."' id='".$name."_$_"."' type='text' size='4' maxlength='2' onkeyup='javascript:chkChar(this);Country();' value='".$info->{$_}."'><div class='country-none' id='countr_list'></div></td><td width='20'>&nbsp;</td><td class='cntr'><div id='countr_none'>Латинская аббревиатура (например RU)</div><div id='country' class='country'></div></td></tr></table>";
 				}
 				else {
-					$out .= "<input type='text' class='dump-edit' name='".$name."_$_"."' value='".$info->{$_}."'>";
+					$out .= "<input type='text' class='dump-cc' name='".$name."_$_"."' value='".$info->{$_}."'>";
 				}
+				$out .= "<i>$_ :</i></li>";
 			}
 			else {
-				$out .= $info->{$_};
+				$out .= "<li><i>$_ :</i>";
+				$out .= "<span class='dump-text'>".$info->{$_}."</span>";
+				$out .= "</li>";
 			}
-			$out .= "</li>";
 		}
 	}
 	$out .= '</ul>';
@@ -631,7 +635,7 @@ sub print_array {
 	$name = shift;
 	$flag = shift;
 
-	$out = "<li><span id='dump_span'>$name :</span></li><ul>";
+	$out = "<li><i id='dump_span'>$name :</i></li><ul>";
 	$cnt = 0;
 	foreach (sort {$a cmp $b} keys @{$info}) {
 		if (ref($_) eq 'HASH') {
@@ -646,11 +650,16 @@ sub print_array {
 				$out .= "<input type='text' class='dump-edit' name='".$name."_$cnt' value='".$info->[$_]."'>";
 			}
 			else {
-				$out .= $info->[$_];
+				$out .= "<span class='dump-text'>".$info->[$_]."</span>";
 			}
 			$out .= "</li>";
 		}
 		$cnt++;
+	}
+	if ($flag) {
+		if ($cnt) {
+			$out .= "<input type='hidden' name='".$name."_count' value='$cnt'>";
+		}
 	}
 	$out .= '</ul>';
 }
@@ -711,7 +720,7 @@ sub message_read {
 		$html,
 		'public_cgi'	=> $conf{'public_cgi'},
 		'public_css'	=> $conf{'public_css'},
-		'title'		=> "<h2>Read message: id $in{'id'}</h2>",
+		'title'		=> "<div class='title'>Read message: id $in{'id'}</div>",
 		'messages'	=> $in{'messages'},
 		'info'		=> $out
 	);
@@ -736,7 +745,7 @@ sub message_mark {
 		$html,
 		'public_cgi'	=> $conf{'public_cgi'},
 		'public_css'	=> $conf{'public_css'},
-		'title'		=> '<h2>Read massage</h2>',
+		'title'		=> '<div class="title">Read massage</div>',
 		'commands'=> $comm,
 		'info'		=> $out
 	);
@@ -762,7 +771,7 @@ sub domain_info {
 		$html,
 		'public_cgi'	=> $conf{'public_cgi'},
 		'public_css'	=> $conf{'public_css'},
-		'title'		=> '<h2>Information from Epp</h2>',
+		'title'		=> '<div class="title">Information from Epp</div>',
 		'commands'=> $comm,
 		'info'		=> $out
 	);
