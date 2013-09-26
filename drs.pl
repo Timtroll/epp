@@ -759,8 +759,21 @@ sub domain_info {
 
 	# check domain
 	($info, $mess) = &chck_domain();
+
+	# delete system field
+	if (exists $info->{'request'}) {
+		delete $info->{'request'};
+	}
+
 	@tmp = $collections -> find( { 'name' => $in{'domain'} } ) -> all;
-	$cmpr = &cmp_request($info, $tmp[0]);
+
+	# delete system field
+	$cmpr = $tmp[0];
+	delete $cmpr->{'_id'};
+	delete $cmpr->{'date'};
+	delete $cmpr->{'expires'};
+
+	$cmpr = &cmp_request($cmpr, $info);
 
 	$out = &info_table($info, 'edit');
 
@@ -1017,10 +1030,110 @@ sub list_domains {
 	);
 }
 
+sub cmp_array {
+	my ($data, $target, $tmp, $cnt, @diff);
+	$data = shift;
+	$target = shift;
+
+	if (scalar(@{$data}) > scalar(@{$data})) {
+		$cnt =  @{$data};
+	}
+	else {
+		$cnt =  @{$target};
+	}
+	for (0..$cnt) {
+		if ((ref($$data[$_]) eq 'HASH') && (ref($$data[$_]) eq 'HASH')) {
+			$tmp = &cmp_hash($$data[$_], $$target[$_]);
+			if (ref($tmp) eq 'HASH') {
+				push @diff, $tmp;
+			}	
+		}
+		elsif ((ref($$target[$_]) eq 'ARRAY') && (ref($$target[$_]) eq 'ARRAY')) {
+			$tmp = &cmp_array($$data[$_], $$target[$_]);
+			if (ref($tmp) eq 'ARRAY') {
+				push @diff, $tmp;
+			}
+		}
+		else {
+			if (($$data[$_] =~ /\D/) && ($$target[$_] =~ /\D/)) {
+				unless ($$data[$_] eq $$target[$_]) {
+					push @diff, $$target[$_];
+				}
+			}
+			else {
+				unless ($$data[$_] == $$target[$_]) {
+					push @diff, $$target[$_];
+				}
+			}
+		}
+	}
+
+	if (scalar(@diff)) {
+		return \@diff;
+	}
+	else {
+		return;
+	}
+}
+
+sub cmp_hash {
+	my ($data, $target, $key, $tmp, %tmp);
+	$data = shift;
+	$target = shift;
+
+	foreach $key (keys %{$data}) {
+		if (exists($$target{$key})) {
+			if ((ref($$data{$key}) eq 'HASH') && (ref($$target{$key}) eq 'HASH')) {
+				$tmp = &cmp_hash($$data{$key}, $$target{$key});
+				if (ref($tmp) eq 'HASH') {
+					$tmp{$key} = $tmp;
+				}
+			}
+			elsif ((ref($$data{$key}) eq 'ARRAY') && (ref($$target{$key}) eq 'ARRAY')) {
+				$tmp = &cmp_array($$data{$key}, $$target{$key});
+				if (ref($tmp) eq 'ARRAY') {
+					$tmp{$key} = $tmp;
+				}
+			}
+			else {
+				if (($$data{$key} =~ /\D/) && ($$target{$key} =~ /\D/)) {
+					unless ($$data{$key} eq $$target{$key}) {
+						$tmp{$key} = $$target{$key};
+					}
+				}
+				else {
+					unless ($$data{$key} == $$target{$key}) {
+						$tmp{$key} = $$target{$key};
+					}
+				}
+			}
+		}
+		else {
+			$tmp{$key} = $$target{$key};
+		}
+	}
+	if (scalar(keys %tmp)) {
+		return \%tmp;
+	}
+	else {
+		return;
+	}
+}
+
+
 sub cmp_request {
 	my ($data, $key, $cnt, $tmp, $target, @tmp, %tmp);
 	$data = shift; # source
 	$target = shift; # target
+
+print Dumper($data);
+print "<hr>";
+print Dumper($target);
+print "<hr>";
+
+	if ((ref($data) eq 'HASH') && (ref($target) eq 'HASH')) {
+		print Dumper(&cmp_hash($data, $target));
+	}
 
 	# clear domain sceleton
 	$domain_sceleton = '';
@@ -1348,6 +1461,7 @@ sub query_domain {
 	}
 	# Create UPDATE form for EPP request
 	else {
+print Dumper($data);
 		$out = &info_table($data, 'edit');
 	}
 	$comm = &create_command_list();
@@ -1509,7 +1623,6 @@ sub chck_domain {
 
 		# check domain
 		$info = $epp->domain_info($in{'domain'});
-
 		
 		&check_response($info, 2001);
 
@@ -1633,7 +1746,7 @@ sub connect_epp {
 		user		=> $conf{'epp_user'},
 		timeout	=> $conf{'epp_timeout'},
 		pass		=> $conf{'epp_pass'},
-		debug	=> 1
+		debug	=> $conf{'debug'}
 	);
 
 	if (($Net::EPP::Simple::Code == 2500)||($Net::EPP::Simple::Code == 2501)||($Net::EPP::Simple::Code == 2502)) {
