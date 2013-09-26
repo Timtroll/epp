@@ -1138,6 +1138,7 @@ print "<hr>";
 	# clear domain sceleton
 	$domain_sceleton = '';
 	$domain_sceleton = {};
+	
 =comment
 	if (ref($data) eq 'HASH') {
 		foreach $key (keys %{$data}) {
@@ -1199,6 +1200,7 @@ print "<hr>";
 		}
 	}
 =cut
+
 # print "\n<hr>\n";
 # print Dumper($domain_sceleton);
 	if (scalar(keys %{$domain_sceleton})) {
