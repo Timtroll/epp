@@ -37,19 +37,49 @@ $obj->{'response'}->{'id'} = $obj->{'response'}->{'msgQ'}->{'id'};
 # check response errors
 &check_response($obj, 2001, 2004);
 
-# Calculate exist same message in the databse
-$count = $collections -> find( { 'id' => $obj->{'response'}->{'msgQ'}->{'id'} } ) -> count;
+if () {
+	# Calculate exist same message in the databse
+	$count = $collections -> find( { 'id' => $obj->{'response'}->{'msgQ'}->{'id'} } ) -> count;
 
-# Insert message into message base if not exists
-$collections->insert( $obj->{'response'} );
+	# Insert message into message base if not exists
+	$collections->insert( $obj->{'response'} );
 
-unless (-e "$conf{'home'}/poll") {
-	# set flag-file for mail icon
-	open (FILE, ">$conf{'home'}/poll") or &error_log($log, 'system', "Could not open to write: $conf{'home'}/poll : $!");
-		print FILE "";
-	close (FILE) or &error_log($log, 'system', "Could not open to write: $conf{'home'}/poll : $!");
-	chmod 0666, "$conf{'home'}/poll";
-}
+	unless (-e "$conf{'home'}/poll") {
+		# set flag-file for mail icon
+		open (FILE, ">$conf{'home'}/poll") or &error_log($log, 'system', "Could not open to write: $conf{'home'}/poll : $!");
+			print FILE "";
+		close (FILE) or &error_log($log, 'system', "Could not open to write: $conf{'home'}/poll : $!");
+		chmod 0666, "$conf{'home'}/poll";
+	}
+
+		# Connect to Epp server
+		$epp = &connect_epp();
+
+		# Ack this message
+		$frame = Net::EPP::Frame::Command::Poll::Ack->new;
+		$frame->setMsgID($in{'id'});
+		$resp = $epp->request($frame);
+
+		# Convert XML response to object
+		$xml = $resp->toString(1);
+		$xml2json = XML::Simple->new();
+		$obj = $xml2json->XMLin($xml, KeyAttr => '');
+
+		# check response errors
+		&check_response($obj, 2001, 2004, 2400);
+
+		if ($obj->{'response'}->{'result'}->{'code'} == 1000) {
+			$in{'messages'} .= $mesg{'message_read_success'};
+
+			# Change status of this message if ack to dequeue
+			$collections -> update( { '_id' => $tmp[0]->{'_id'} }, { '$set' => { 'status' => 'old' } } );
+
+			# remove flag-file for mail css
+			unlink ("$conf{'home'}/poll");
+		}
+		elsif ($obj->{'response'}->{'result'}->{'code'} == 2400) {
+			$in{'messages'} .= $mesg{'message_already_read'};
+		}
 
 print "Good";
 exit;
