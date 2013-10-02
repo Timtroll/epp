@@ -163,41 +163,17 @@ sub domain_update {
 	}
 #print Dumper(\@tmp);
 
-	# @temp = ();
-	# foreach (keys %tmp) {
-		# if (/^status/) { push @temp, $tmp{$_}; }
-	# }
-	# if (scalar(@temp)) { $domain_sceleton->{'add'}->{'status'} = \@temp; }
-
 	# Prepare data for 'rem' segment of request
 	$in{'domain'} = $in{'name'};
 
 	# check domain & get donain info
 	($info, $mess) = &chck_domain();
 
-# print "<hr>";
-# print "<hr>";
-# print Dumper($info);
-# print "<hr>";
-# print "<hr>\n=======\n";
-
 	# Find difference of input and exists 'ns'
 	if (scalar(@tmp)) {
 		$domain_sceleton->{'rem'}->{'ns'} = $info->{'ns'};
 	}
-# print Dumper($domain_sceleton);
 
-	# Find difference of input and exists 'status' 
-	# @temp = ();
-	# foreach (keys %tmp) {
-		# if (/^status/) { push @temp, $tmp{$_}; }
-	# }
-	# map { $count{$_}++ }  (@temp, @{$info->{'status'}});
-	# foreach (keys %count) {
-		# if ($count{$_} == 1) { push @differ, $_; }
-	# }
-	# if (scalar(@differ)) { $domain_sceleton->{'rem'}->{'status'} = \@differ; }
- 
 	# Prepare remove contacts
 	if (($in{'contacts_tech'} ne $info->{'contacts'}->{'tech'})&&($in{'contacts_tech'})) {
 		$domain_sceleton->{'rem'}->{'contacts'}->{'tech'} = $info->{'contacts'}->{'tech'};
@@ -224,6 +200,10 @@ print Dumper($domain_sceleton);
 	# Store new domain
 	if (($Net::EPP::Simple::Code == 1000)||($Net::EPP::Simple::Code == 1000)) {
 print Dumper($domain_sceleton);
+		$domain_sceleton->{'date'} = time();
+		$domain_sceleton->{'domain'} = time();
+		$domain_sceleton->{'command'} = 'domain_update';
+		$collections->insert( $domain_sceleton );
 	}
 print $Net::EPP::Simple::Code;
 print $Net::EPP::Simple::Message;
@@ -309,6 +289,11 @@ sub domain_renew {
 
 	# Store new domain
 	if ($Net::EPP::Simple::Code == 1000) {
+		$renew->{'date'} = time();
+		$renew->{'domain'} = time();
+		$renew->{'command'} = 'domain_renew';
+		$collections->insert( $renew );
+
 		$out{'info'} = "Домен поставлен в очередь на продление: ".$Net::EPP::Simple::Message;
 	}
 	else {
@@ -362,6 +347,7 @@ sub domain_create {
 		delete ($domain_sceleton->{'authInfo'});
 	}
 print Dumper($domain_sceleton);
+exit;
 	# Create new domain
 	$info = $epp->create_domain($domain_sceleton);
 	
