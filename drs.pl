@@ -16,8 +16,8 @@ use XML::Simple;
 use JSON::XS;
 
 
-our (%conf, %collection, %months, %week, %in, %tmpl, %mesg, %domain_mail, %domain_epp, %contact_epp, %commands, %menu_line);
-our (@week);
+our (%conf, %collection, %months, %week, %in, %tmpl, %mesg, %domain_mail, %command_epp, %commands, %menu_line);
+our (@week, @sceleton);
 our ($domain_sceleton);
 require "drs.pm";
 
@@ -45,7 +45,7 @@ elsif ($in{'get_price'})	{ &get_price(&connect($conf{'database'}, $collection{'z
 elsif ($in{'poll'})		{ &get_poll(&connect($conf{'database'}, $collection{'messages'})); }
 elsif ($in{'get_mail'})		{ &get_mail(); }
 elsif ($in{'message_read'})	{ &message_read(&connect($conf{'database'}, $collection{'messages'})); }
-elsif ($in{'domain_create'})	{ &domain_create(&connect($conf{'database'}, $collection{'domains'})); }
+elsif ($in{'domain_create'})	{ &domain_create(&connect($conf{'database'}, $collection{'queue'})); }
 elsif ($in{'domain_save'})	{ &domain_save(&connect($conf{'database'}, $collection{'domains'})); }
 elsif ($in{'domain_update'}){ &domain_update(&connect($conf{'database'}, $collection{'domains'})); }
 elsif ($in{'domain_renew'}){ &domain_renew(&connect($conf{'database'}, $collection{'domains'})); }
@@ -59,7 +59,7 @@ sub get_mail {
 	if (-e "$conf{'home'}/poll") {
 		$flag = 'new';
 	}
-	
+
 	# Load mail frame template
 	$html = &load_tempfile('file' => $tmpl{'get_poll'});
 
@@ -131,10 +131,105 @@ sub get_poll {
 }
 
 sub domain_update {
-	my ($html);
+	my ($html, $key, $kkey, $info, $mess, $collections, $epp, @tmp, @temp, @differ, @diff, %count, %tmp);
+	$collections = shift;
+
+	# Prepare params data for sending
+	map { if ($in{$_}) { $tmp{$_} = $in{$_}; } } @sceleton;
+
+	# Prerare request obect
+	$domain_sceleton = {
+			'name'	=> $in{'name'},
+			'add'		=> {
+				'contacts'	=> {
+					'tech'		=> $in{'contacts_tech'},
+					'billing'	=> $in{'contacts_billing'},
+					'admin'	=> $in{'contacts_admin'}
+				},
+			},
+			'chg'		=> {
+				'registrant'	=> $in{'registrant'},
+				'authInfo'	=> &create_rnd(10)
+			}
+	};
+
+	# 'add' segment 'ns'
+	@tmp = ();
+	foreach (keys %tmp) {
+		if (/^ns/) { push @tmp, $tmp{$_}; }
+	}
+	if (scalar(@tmp)) {
+		if (scalar(@tmp)) { $domain_sceleton->{'add'}->{'ns'} = \@tmp; }
+	}
+#print Dumper(\@tmp);
+
+	# @temp = ();
+	# foreach (keys %tmp) {
+		# if (/^status/) { push @temp, $tmp{$_}; }
+	# }
+	# if (scalar(@temp)) { $domain_sceleton->{'add'}->{'status'} = \@temp; }
+
+	# Prepare data for 'rem' segment of request
+	$in{'domain'} = $in{'name'};
+
+	# check domain & get donain info
+	($info, $mess) = &chck_domain();
+
+# print "<hr>";
+# print "<hr>";
+# print Dumper($info);
+# print "<hr>";
+# print "<hr>\n=======\n";
+
+	# Find difference of input and exists 'ns'
+	if (scalar(@tmp)) {
+		$domain_sceleton->{'rem'}->{'ns'} = $info->{'ns'};
+	}
+# print Dumper($domain_sceleton);
+
+	# Find difference of input and exists 'status' 
+	# @temp = ();
+	# foreach (keys %tmp) {
+		# if (/^status/) { push @temp, $tmp{$_}; }
+	# }
+	# map { $count{$_}++ }  (@temp, @{$info->{'status'}});
+	# foreach (keys %count) {
+		# if ($count{$_} == 1) { push @differ, $_; }
+	# }
+	# if (scalar(@differ)) { $domain_sceleton->{'rem'}->{'status'} = \@differ; }
+ 
+	# Prepare remove contacts
+	if (($in{'contacts_tech'} ne $info->{'contacts'}->{'tech'})&&($in{'contacts_tech'})) {
+		$domain_sceleton->{'rem'}->{'contacts'}->{'tech'} = $info->{'contacts'}->{'tech'};
+	}
+	if (($in{'contacts_billing'} ne $info->{'contacts'}->{'billing'})&&($in{'contacts_billing'})) {
+		$domain_sceleton->{'rem'}->{'contacts'}->{'billing'} = $info->{'contacts'}->{'billing'};
+	}
+	if (($in{'contacts_admin'} ne $info->{'contacts'}->{'admin'})&&($in{'contacts_admin'})) {
+		$domain_sceleton->{'rem'}->{'contacts'}->{'admin'} = $info->{'contacts'}->{'admin'};
+	}
+	
+print Dumper($domain_sceleton);
+#exit;
+	# Send create domain request
+	$epp = &connect_epp();
+
+
+	# Create new domain
+	$info = $epp->update_domain($domain_sceleton);
+	
+	# check response errors
+	&check_response('', 2001, 2003, 2004, 2005, 2201, 2302, 2303, 2307,  2309);
+
+	# Store new domain
+	if (($Net::EPP::Simple::Code == 1000)||($Net::EPP::Simple::Code == 1000)) {
+print Dumper($domain_sceleton);
+	}
+print $Net::EPP::Simple::Code;
+print $Net::EPP::Simple::Message;
 
 	# Send create domain request
-#	$html = Dumper($domain_sceleton);
+	$html = Dumper($domain_sceleton);
 
 	# Store new domain in the database
 
@@ -178,10 +273,11 @@ sub domain_save {
 }
 
 sub domain_renew {
-	my ($collections, $epp, $renew, $info, $html, @tmp);
+	my ($collections, $epp, $renew, $info, $html, @tmp, %out);
 	$collections = shift;
 
 	# Find current domain in database
+	$in{'domain'} = $in{'name'};
 	@tmp = $collections -> find( { 'name' => $in{'domain'} } ) -> all;
 
 	# Create error if domain more than one
@@ -189,86 +285,74 @@ sub domain_renew {
 		$in{'messages'} = "В базе находится ".scalar(@tmp)." доменов ".$in{'domain'}.", требуется вмешательство.";
 		&main();
 	}
-# print "=";
-# print &sec2date(&date2sec($tmp[0]->{'exDate'}), 'date');
-# exit;
+
 	# Create renew object
+#	$html = &date2sec($tmp[0]->{'exDate'});
+	$html = $tmp[0]->{'exDate'};
+	unless ($in{'domain'} =~ /.ua$/) {
+#		$html=~s/2013/2014/;
+	}
 	$renew = {
 		'name'		=> $in{'domain'},
-		'cur_exp_date'	=> &sec2date(&date2sec($tmp[0]->{'exDate'}), 'date'),
+		'cur_exp_date'	=> $html,
 		'period'		=> 1
 	};
 
-print Dumper($renew);
-print "<hr>";
-# exit;
-# $tmp[0]->{'exDate'} =~ s/T.*Z//;
-# print $tmp[0]->{'exDate'};
-#exit;
 	# Send create domain request
 	$epp = &connect_epp();
 
-# print Dumper($epp);	
-# print "<hr>";
-
 	# Create new domain
-open( STDERR, ">&STDOUT") or die;
 	$info = $epp->renew_domain($renew);
-# print Dumper($info);	
-print "<hr>";
+
 	# check response errors
 	&check_response('', 2105, 2201, 2303, 2304, 2309);
-print $Net::EPP::Simple::Code.' : Code '.$Net::EPP::Simple::Message."<br>".$Net::EPP::Simple::Error;
-print $in{'messages'};
-print "<hr>";
 
 	# Store new domain
 	if ($Net::EPP::Simple::Code == 1000) {
-		# Try 5 times get info about created domain
-		foreach (1..5) {
-			# wait 5 sec
-			sleep (5);
-
-			# get information about new domain
-			$info = '';
-			$info = $epp->domain_info($in{'domain'});
-
-			# check response errors
-			&check_response($info, 2001);
-
-			if ($Net::EPP::Simple::Code == 1000) {
-				# Check expired date 
-				$renew = &date2sec($tmp[0]->{'exDate'}) + 60*60*24*365;
-				if (($info->{'response'}->{'exDate'} > &date2sec($tmp[0]->{'exDate'}) + 60*60*24*364) && ($info->{'response'}->{'exDate'} < &date2sec($tmp[0]->{'exDate'}) + 60*60*24*367)) {
-print $renew;
-print "<hr>";
-print Dumper($info);
-					# Update domain in database
-					$collections->update( { 'exDate' => $info->{'response'}->{'exDate'} } );
-					$html = &info_table($info);
-					$in{'messages'} = 'Домен успешно продлен и его состояние в базе обновлено';
-					last;
-				}
-			}
-			if ($Net::EPP::Simple::Code == 2303) {
-				$in{'messages'} = 'Истекло время ожидания - 25 секунд. Заявка на продление домена еще не обработана. Вручную внесите домен в базу.';
-			}
-		}
+		$out{'info'} = "Домен поставлен в очередь на продление: ".$Net::EPP::Simple::Message;
+	}
+	else {
+		$out{'info'} = "Ошибка продления домена: ".$Net::EPP::Simple::Message;
 	}
 	$epp = $info = '';
 	@tmp = ();
 
-	&main(
-		'content'	=> $html
+	# Load mail frame template
+	$html = &load_tempfile('file' => $tmpl{'frame'});
+
+	$out{'title'} = "<div class='title'>RENEW домена $in{'domain'}</div>";
+	$out{'messages'} = $Net::EPP::Simple::Error;
+	print &small_parsing(
+		$html,
+		'public_cgi'	=> $conf{'public_cgi'},
+		'public_css'	=> $conf{'public_css'},
+		'public_url'	=> $conf{'public_url'},
+		%out
 	);
+
+	$html = '';
+	exit;
 }
 
 sub domain_create {
-	my ($collections, $epp, $info, $tmp, $html);
+	my ($collections, $epp, $info, $tmp, $html, @ns);
 	$collections = shift;
 
 	# Send create domain request
 	$epp = &connect_epp();
+
+	# Prepare request
+	$domain_sceleton = $command_epp{'domain_create'};
+	$domain_sceleton->{'name'} = $in{'domain'};
+	$domain_sceleton->{'period'} = $in{'period'};
+	foreach (keys %in) {
+		if (/^ns/) { push @ns, $in{$_}; }
+	}
+	$domain_sceleton->{'ns'} = \@ns;
+	$domain_sceleton->{'registrant'} = $in{'registrant'};
+	$domain_sceleton->{'contacts'}->{'tech'} = $in{'contacts_tech'};
+	$domain_sceleton->{'contacts'}->{'admin'} = $in{'contacts_admin'};
+	$domain_sceleton->{'contacts'}->{'billing'} = $in{'contacts_billing'};
 
 	# Remove the unneeded fields
 	# Fields for *.com.ua domains
@@ -277,41 +361,24 @@ sub domain_create {
 		delete ($domain_sceleton->{'license'});
 		delete ($domain_sceleton->{'authInfo'});
 	}
-
+print Dumper($domain_sceleton);
 	# Create new domain
 	$info = $epp->create_domain($domain_sceleton);
 	
 	# check response errors
 	&check_response('', 2001, 2003, 2004, 2005, 2201, 2302, 2303, 2307,  2309);
 
-	# Store new domain
+	# Store new domain to request queue
 	if ($Net::EPP::Simple::Code == 1000) {
-		# Try 5 times get info about created domain
-		foreach (1..5) {
-			# wait 5 sec
-			sleep (5);
+		$domain_sceleton->{'date'} = time();
+		$domain_sceleton->{'domain'} = time();
+		$domain_sceleton->{'command'} = 'domain_create';
+		$collections->insert( $domain_sceleton );
 
-			# get information about new domain
-			$info = '';
-			$info = $epp->domain_info($in{'domain'});
-
-			# check response errors
-			&check_response($info, 2001);
-
-			if ($Net::EPP::Simple::Code == 1000) {
-				# Convert response to UTF8
-				$info = &obj2utf($info);
-
-				# Add new domain to database
-				$collections->insert( $info->{'response'} );
-				$html = &info_table($info);
-				$in{'messages'} = 'Домен успешно создан и добавлен в базу';
-				last;
-			}
-		}
-		if ($Net::EPP::Simple::Code == 2303) {
-			$in{'messages'} = 'Истекло время ожидания - 25 секунд. Заявка на добавление домена еще не обработана. Вручную внесите домен в базу.';
-		}
+		$in{'messages'} = "Запрос на добавление домена $in{'domain'} добавлен в очередь";
+	}
+	else {
+		$in{'messages'} = $Net::EPP::Simple::Code.$Net::EPP::Simple::Message;
 	}
 	$epp = '';
 
@@ -581,6 +648,7 @@ sub info_table {
 					$out .= "<li>";
 					$out .= "<input type='text' class='dump-edit' name='$_' value='".$info->{$_}."'>";
 					$out .= "<i>$_ :</i></li>";
+					push @sceleton, $_;
 				}
 				else {
 					$out .= "<li><i>$_ :</i>";
@@ -591,6 +659,8 @@ sub info_table {
 		}
 		$out .= '</ul>';
 	}
+	$out .= "<input type='hidden' name='sceleton' id='sceleton' value='".join(' ', @sceleton)."'>";
+
 	return $out;
 }
 
@@ -600,7 +670,7 @@ sub print_hash {
 	$name = shift;
 	$flag = shift;
 
-	$out = "<li><i id='dump_span'>$name :</i></li><ul>";
+	$out = "<li><i class='dump_span'>$name :</i></li><ul>";
 	foreach (sort {$a cmp $b} keys %{$info}) {
 		if (ref($info->{$_}) eq 'HASH') {
 			$out .= &print_hash($info->{$_}, $_, $flag);
@@ -613,11 +683,14 @@ sub print_hash {
 				$out .= "<li>";
 				if (/^cc$/) {
 					$out .= "<table width='70%' border='0' cellpadding='0' cellspacing='0' align='right'><tr><td width='8%'><input class='dump-edit' name='".$name."_$_"."' id='".$name."_$_"."' type='text' size='4' maxlength='2' onkeyup='javascript:chkChar(this);Country();' value='".$info->{$_}."'><div class='country-none' id='countr_list'></div></td><td width='20'>&nbsp;</td><td class='cntr'><div id='countr_none'>Латинская аббревиатура (например RU)</div><div id='country' class='country'></div></td></tr></table>";
+					push @sceleton, $name."_$_";
 				}
 				else {
 					$out .= "<input type='text' class='dump-cc' name='".$name."_$_"."' value='".$info->{$_}."'>";
+					push @sceleton, $name."_$_";
 				}
 				$out .= "<i>$_ :</i></li>";
+				
 			}
 			else {
 				$out .= "<li><i>$_ :</i>";
@@ -635,8 +708,9 @@ sub print_array {
 	$name = shift;
 	$flag = shift;
 
-	$out = "<li><i id='dump_span'>$name :</i></li><ul>";
+	$out = "<li><i id='dump_span'>$name :</i></li><ul id='".$name."_new'>";
 	$cnt = 0;
+	
 	foreach (sort {$a cmp $b} keys @{$info}) {
 		if (ref($_) eq 'HASH') {
 			$out .= &print_hash($_, $name, $flag);
@@ -647,7 +721,14 @@ sub print_array {
 		else {
 			$out .= "<li>";
 			if ($flag) {
-				$out .= "<input type='text' class='dump-edit' name='".$name."_$cnt' value='".$info->[$_]."'>";
+				if ($cnt == (scalar(@{$info}) -1)) {
+					$tmp = "<b onclick=\"javascript:AddInput('$name');\">+</b>";
+				}
+				else {
+					$tmp = ' ';
+				}
+				$out .= "<input type='text' class='dump-edit' name='".$name."_$cnt' value='".$info->[$_]."'>$tmp";
+				push @sceleton, $name."_$cnt";
 			}
 			else {
 				$out .= "<span class='dump-text'>".$info->[$_]."</span>";
@@ -656,9 +737,10 @@ sub print_array {
 		}
 		$cnt++;
 	}
+		$out .= "</li><div id='".$name."__new'></div>";
 	if ($flag) {
 		if ($cnt) {
-			$out .= "<input type='hidden' name='".$name."_count' value='$cnt'>";
+			$out .= "<input type='hidden' name='".$name."_count' id='".$name."_count' value='$cnt'>";
 		}
 	}
 	$out .= '</ul>';
@@ -739,7 +821,7 @@ sub message_mark {
 	$epp = &connect_epp();
 
 	$html = &load_tempfile('file' => $tmpl{'frame'});
-	$comm = &create_command_list();
+	$comm = &create_command_list('frame');
 
 	print &small_parsing(
 		$html,
@@ -761,9 +843,9 @@ sub domain_info {
 	($info, $mess) = &chck_domain();
 
 	# delete system field
-	if (exists $info->{'request'}) {
-		delete $info->{'request'};
-	}
+	delete $info->{'request'};
+	delete $info->{'response'};
+
 
 	@tmp = $collections -> find( { 'name' => $in{'domain'} } ) -> all;
 
@@ -778,7 +860,7 @@ sub domain_info {
 	$out = &info_table($info, 'edit');
 
 	$html = &load_tempfile('file' => $tmpl{'frame'});
-	$comm = &create_command_list();
+	$comm = &create_command_list('frame');
 
 	print &small_parsing(
 		$html,
@@ -1009,7 +1091,7 @@ sub list_domains {
 		$list .= &small_parsing(
 			$raw,
 			'public_cgi'	=> $conf{'public_cgi'},
-			'domain'	=> ' : '.$data[$_] -> {'registrant'}.' : '.&create_command($data[$_] -> {'name'}, 'class' => 'dom'),
+			'domain'	=> &create_command($data[$_] -> {'name'}, 'class' => 'dom'),
 			'class'	=> $class,
 			'expires'	=> $data[$_] -> {'expires'},
 			%comm
@@ -1030,104 +1112,15 @@ sub list_domains {
 	);
 }
 
-sub cmp_array {
-	my ($data, $target, $tmp, $cnt, @diff);
-	$data = shift;
-	$target = shift;
-
-	if (scalar(@{$data}) > scalar(@{$data})) {
-		$cnt =  @{$data};
-	}
-	else {
-		$cnt =  @{$target};
-	}
-	for (0..$cnt) {
-		if ((ref($$data[$_]) eq 'HASH') && (ref($$data[$_]) eq 'HASH')) {
-			$tmp = &cmp_hash($$data[$_], $$target[$_]);
-			if (ref($tmp) eq 'HASH') {
-				push @diff, $tmp;
-			}	
-		}
-		elsif ((ref($$target[$_]) eq 'ARRAY') && (ref($$target[$_]) eq 'ARRAY')) {
-			$tmp = &cmp_array($$data[$_], $$target[$_]);
-			if (ref($tmp) eq 'ARRAY') {
-				push @diff, $tmp;
-			}
-		}
-		else {
-			if (($$data[$_] =~ /\D/) && ($$target[$_] =~ /\D/)) {
-				unless ($$data[$_] eq $$target[$_]) {
-					push @diff, $$target[$_];
-				}
-			}
-			else {
-				unless ($$data[$_] == $$target[$_]) {
-					push @diff, $$target[$_];
-				}
-			}
-		}
-	}
-
-	if (scalar(@diff)) {
-		return \@diff;
-	}
-	else {
-		return;
-	}
-}
-
-sub cmp_hash {
-	my ($data, $target, $key, $tmp, %tmp);
-	$data = shift;
-	$target = shift;
-
-	foreach $key (keys %{$data}) {
-		if (exists($$target{$key})) {
-			if ((ref($$data{$key}) eq 'HASH') && (ref($$target{$key}) eq 'HASH')) {
-				$tmp = &cmp_hash($$data{$key}, $$target{$key});
-				if (ref($tmp) eq 'HASH') {
-					$tmp{$key} = $tmp;
-				}
-			}
-			elsif ((ref($$data{$key}) eq 'ARRAY') && (ref($$target{$key}) eq 'ARRAY')) {
-				$tmp = &cmp_array($$data{$key}, $$target{$key});
-				if (ref($tmp) eq 'ARRAY') {
-					$tmp{$key} = $tmp;
-				}
-			}
-			else {
-				if (($$data{$key} =~ /\D/) && ($$target{$key} =~ /\D/)) {
-					unless ($$data{$key} eq $$target{$key}) {
-						$tmp{$key} = $$target{$key};
-					}
-				}
-				else {
-					unless ($$data{$key} == $$target{$key}) {
-						$tmp{$key} = $$target{$key};
-					}
-				}
-			}
-		}
-		else {
-			$tmp{$key} = $$target{$key};
-		}
-	}
-	if (scalar(keys %tmp)) {
-		return \%tmp;
-	}
-	else {
-		return;
-	}
-}
-
-
 sub cmp_request {
 	my ($data, $key, $cnt, $tmp, $target, @tmp, %tmp);
 	$data = shift; # source
 	$target = shift; # target
 
 print Dumper($data);
+
 print "<hr>";
+
 print Dumper($target);
 print "<hr>";
 
@@ -1139,7 +1132,7 @@ print "<hr>";
 	$domain_sceleton = '';
 	$domain_sceleton = {};
 	
-=comment
+#comment
 	if (ref($data) eq 'HASH') {
 		foreach $key (keys %{$data}) {
 			if ($key =~ /^_id$/) { next; }
@@ -1199,7 +1192,7 @@ print "<hr>";
 			}
 		}
 	}
-=cut
+#cut
 
 # print "\n<hr>\n";
 # print Dumper($domain_sceleton);
@@ -1456,11 +1449,11 @@ sub query_domain {
 	unless ($data) {
 		# delete Billing field from sceleton if domain is *.com.ua
 		if ($in{'domain'} =~ /.*\.com\.ua$/) {
-			delete ($domain_epp{'create'}->{'contacts'}->{'billing'});
-			delete ($domain_epp{'create'}->{'license'});
+			delete ($command_epp{'create'}->{'contacts'}->{'billing'});
+			delete ($command_epp{'create'}->{'license'});
 		}
-		$domain_epp{'create'}->{'name'} = $in{'domain'};
-		$out = &info_table($domain_epp{'create'}, 'edit');
+		$command_epp{'create'}->{'name'} = $in{'domain'};
+		$out = &info_table($command_epp{'create'}, 'edit');
 	}
 	# Create UPDATE form for EPP request
 	else {
@@ -1654,6 +1647,98 @@ sub chck_domain {
 
 ############ Subs ############
 
+sub cmp_array {
+	my ($data, $target, $tmp, $cnt, @diff);
+	$data = shift;
+	$target = shift;
+
+	if (scalar(@{$data}) > scalar(@{$data})) {
+		$cnt =  @{$data};
+	}
+	else {
+		$cnt =  @{$target};
+	}
+	for (0..$cnt) {
+		if ((ref($$data[$_]) eq 'HASH') && (ref($$data[$_]) eq 'HASH')) {
+			$tmp = &cmp_hash($$data[$_], $$target[$_]);
+			if (ref($tmp) eq 'HASH') {
+				push @diff, $tmp;
+			}	
+		}
+		elsif ((ref($$target[$_]) eq 'ARRAY') && (ref($$target[$_]) eq 'ARRAY')) {
+			$tmp = &cmp_array($$data[$_], $$target[$_]);
+			if (ref($tmp) eq 'ARRAY') {
+				push @diff, $tmp;
+			}
+		}
+		else {
+			if ($$data[$_] && $$target[$_]) {
+				if (($$data[$_] =~ /\D/) && ($$target[$_] =~ /\D/)) {
+					unless ($$data[$_] eq $$target[$_]) {
+						push @diff, $$target[$_];
+					}
+				}
+				else {
+					unless ($$data[$_] == $$target[$_]) {
+						push @diff, $$target[$_];
+					}
+				}
+			}
+		}
+	}
+
+	if (scalar(@diff)) {
+		return \@diff;
+	}
+	else {
+		return;
+	}
+}
+
+sub cmp_hash {
+	my ($data, $target, $key, $tmp, %tmp);
+	$data = shift;
+	$target = shift;
+
+	foreach $key (keys %{$data}) {
+		if (exists($$target{$key})) {
+			if ((ref($$data{$key}) eq 'HASH') && (ref($$target{$key}) eq 'HASH')) {
+				$tmp = &cmp_hash($$data{$key}, $$target{$key});
+				if (ref($tmp) eq 'HASH') {
+					$tmp{$key} = $tmp;
+				}
+			}
+			elsif ((ref($$data{$key}) eq 'ARRAY') && (ref($$target{$key}) eq 'ARRAY')) {
+				$tmp = &cmp_array($$data{$key}, $$target{$key});
+				if (ref($tmp) eq 'ARRAY') {
+					$tmp{$key} = $tmp;
+				}
+			}
+			else {
+				if (($$data{$key} =~ /\D/) && ($$target{$key} =~ /\D/)) {
+					unless ($$data{$key} eq $$target{$key}) {
+						$tmp{$key} = $$target{$key};
+					}
+				}
+				else {
+					unless ($$data{$key} == $$target{$key}) {
+						$tmp{$key} = $$target{$key};
+					}
+				}
+			}
+		}
+		else {
+			$tmp{$key} = $$target{$key};
+		}
+	}
+	if (scalar(keys %tmp)) {
+		return \%tmp;
+	}
+	else {
+		return;
+	}
+}
+
 sub obj2utf {
 	my ($obj, $key);
 	$obj = shift;
@@ -1749,7 +1834,7 @@ sub connect_epp {
 		user		=> $conf{'epp_user'},
 		timeout	=> $conf{'epp_timeout'},
 		pass		=> $conf{'epp_pass'},
-		debug	=> $conf{'debug'}
+		debug	=> $conf{'debug_epp'}
 	);
 
 	if (($Net::EPP::Simple::Code == 2500)||($Net::EPP::Simple::Code == 2501)||($Net::EPP::Simple::Code == 2502)) {
@@ -1774,7 +1859,8 @@ sub connect {
 	unless ($col) { $col = $collection{'domains'}; }
 
 	# Read list of domains
-	$client = MongoDB::MongoClient -> new(host => $conf{'db_link'});
+#	$client = MongoDB::MongoClient -> new(host => $conf{'db_link'});
+	$client = MongoDB::Connection -> new(host => $conf{'db_link'});
 	$db = $client -> get_database( $base );
 	$collections = $db->get_collection( $col);
 
@@ -1829,11 +1915,31 @@ sub sec2date {
 }
 
 sub create_command_list {
-	my ($comm, $out);
+	my ($comm, $out, $tmp, @tmp);
 
 	$comm = &load_tempfile('file' => $tmpl{'commands'});
 	foreach (sort {$b cmp $a} keys %commands) {
-		$out .= &create_command($_, 'form' => 'request_form', 'post' => $commands{$_});
+		unshift @tmp, "<input class='sbmt' type='submit' value='$_' name='$commands{$_}'>";
+	}
+	$out = &small_parsing(
+		$comm,
+		'public_cgi'	=> $conf{'public_cgi'},
+		'commands'=> join('</td><td>', @tmp)
+	);
+	$comm = '';
+
+	return $out;
+}
+=comment
+sub create_command_list {
+	my ($comm, $out, $tmp, $frame);
+	$frame = shift;
+
+	$comm = &load_tempfile('file' => $tmpl{'commands'});
+	$tmp = 'request_form';
+	if ($frame) { $tmp = 'frame_'.$tmp; }
+	foreach (sort {$b cmp $a} keys %commands) {
+		$out .= &create_command($_, 'form' => $tmp, 'post' => $commands{$_});
 	}
 	$out = &small_parsing(
 		$comm,
@@ -1844,7 +1950,7 @@ sub create_command_list {
 
 	return $out;
 }
-
+=cut
 sub create_command {
 	my ($text, $tag, $key, $comm, $tmp, %hach);
 	$text = shift;
@@ -1922,11 +2028,19 @@ sub read_param {
 		}
 	}
 	if ($domain) {
-		$domain_sceleton = $domain_epp{$domain};
+		# Rean fields for object
+		if (@sceleton = split(' ', param('sceleton'))){
+			foreach (@sceleton) {
+				$in{$_} = param($_);
+			}
+		}
+=comment
+		$domain_sceleton = $command_epp{$domain};
 		foreach $key (keys %{$domain_sceleton}) {
+print "$key= ";
 			if (ref($domain_sceleton->{$key}) eq 'HASH') {
 				foreach (keys %{$domain_sceleton->{$key}}) {
-					if (exists $domain_epp{"domain_$domain"}->{$_}) {
+					if (exists $command_epp{"domain_$domain"}->{$_}) {
 						unless ($domain_sceleton->{$key}->{$_} = param($key."_$_")) {
 							$domain_sceleton->{$key}->{$_} = '';
 						}
@@ -1936,7 +2050,7 @@ sub read_param {
 			elsif (ref($domain_sceleton->{$key}) eq 'ARRAY') {
 				$cnt = 0;
 				foreach (0..(param($key."_count")-1)) {
-					if (exists $domain_epp{"domain_$domain"}->{$key}) {
+					if (exists $command_epp{"domain_$domain"}->{$key}) {
 						unless ($domain_sceleton->{$key}[$cnt] = param($key."_$_")) {
 							$domain_sceleton->{$key}[$cnt] = '';
 						}
@@ -1945,15 +2059,16 @@ sub read_param {
 				}
 			}
 			else {
-				if (exists $domain_epp{"domain_$domain"}->{$key}) {
+				if (exists $command_epp{"domain_$domain"}->{$key}) {
 					unless ($domain_sceleton->{$key} = param($key)) {
 						$domain_sceleton->{$key} = '';
 					}
 				}
 			}
 		}
-# print Dumper($domain_sceleton);
+ print Dumper($domain_sceleton);
 # print "<hr>";
+=cut
 	}
 }
 
@@ -2012,6 +2127,16 @@ sub put_mail_auth {
 	};
 
 	return $error;
+}
+
+sub create_rnd {
+	my ($amount, $out, @chars);
+	$amount = shift;
+	
+	@chars = split('', 'Aa0Bb1Cc2Dd3Ee4Ff5Gg6Hh7Ii8Jj9KkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz');
+	$out = join("", @chars[ map{ rand @chars } (0 .. $amount) ]);
+
+	return $out;
 }
 
 sub prnerr {

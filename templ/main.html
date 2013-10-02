@@ -36,6 +36,17 @@ th {
 </style>
 <%javascript%>
 <script src="<%public_css%>/domain_info.js"></script>
+<script>
+function reloadIt() {
+	var ifrm = document.getElementById('mymail');
+	var doc = ifrm.contentDocument? ifrm.contentDocument: ifrm.contentWindow.document;
+	if ( doc.getElementById('poll').value) {
+		var form = doc.getElementById('poll').value;
+		if (form == 'old') { document.getElementById("mymail").src='<%public_cgi%>?get_mail=1'; }
+		else { document.getElementById("mymail").src='<%public_cgi%>?get_mail=1'; }
+	}
+}
+</script>
 </head>
 <body>
 <table width="998"  height="100%" border="0" align="center" cellpadding="5" cellspacing="5" style="height:100%">
@@ -49,7 +60,7 @@ th {
    </div>
 </td>
 <%query%>
-       <td width="40" align="right" valign="middle"><div id="dd"></div></td>
+       <td width="40" align="right" valign="middle"><div id="dd"><iframe onLoad="javascript: setTimeout('reloadIt()',300000);" class='mailframe' name='mymail' id='mymail' frameBorder='0' style='border: 0; display: block; width: 26px; height: 26px' src='<%public_cgi%>?get_mail=1'></iframe></div></td>
        <td width="40" align="right" valign="middle"><a href="#" onclick="javascript:document.location.href='<%public_cgi%>?logout=1';"><img src="<%public_css%>/logout.png" width="24" height="24" align="right"  class="logout"/></a></td>
 	  </tr>
 	 </table>
@@ -69,18 +80,5 @@ th {
   </div>
 </div>
 <div id="command_fields" style="display:none;"></div>
-<script>
-var txt='Это текст из JavaScript main';
-get_mail();
-reloadIt();
-//setTimeout("document.getElementById('dd').innerHTML = frames['mymail'].txt2",1000);
-function reloadIt() {
-	document.getElementById("mymail").src='<%public_cgi%>?get_mail=1';
-	setTimeout("reloadIt()",60000);
-}
-function get_mail (url) {
-	window.document.getElementById('dd').innerHTML = "<iframe class='mailframe' name='mymail' id='mymail' frameBorder='0' style='border: 0; display: block; width: 26px; height: 26px'></iframe>"
-}
-  </script>
  </body>
 </html>
