@@ -80,6 +80,9 @@ if () {
 		elsif ($obj->{'response'}->{'result'}->{'code'} == 2400) {
 			$in{'messages'} .= $mesg{'message_already_read'};
 		}
+}
+else {
+}
 
 print "Good";
 exit;
