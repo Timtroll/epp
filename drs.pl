@@ -347,7 +347,7 @@ sub domain_create {
 		delete ($domain_sceleton->{'authInfo'});
 	}
 print Dumper($domain_sceleton);
-exit;
+
 	# Create new domain
 	$info = $epp->create_domain($domain_sceleton);
 	
