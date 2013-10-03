@@ -6,14 +6,14 @@ use CGI qw/param/;
 use MIME::Base64;
 use IO::Socket;
 use Encode qw(encode decode);
-use Net::Whois::Raw qw( whois );
+#use Net::Whois::Raw qw( whois );
 use MongoDB;
 use MongoDB::OID;
 use Time::Local;
 use Net::EPP::Simple;
 use LWP::Simple;
 use XML::Simple;
-use JSON::XS;
+#use JSON::XS;
 
 
 our (%conf, %collection, %months, %week, %in, %tmpl, %mesg, %domain_mail, %command_epp, %commands, %menu_line);
@@ -78,7 +78,7 @@ sub get_mail {
 sub get_poll {
 	my ($collections, $epp, $resp, $xml, $xml2json, $obj, $count, $frame);
 	$collections = shift;
-
+=comment
 	# Connect to Epp server
 	$epp = &connect_epp();
 
@@ -125,7 +125,7 @@ sub get_poll {
 			chmod 0666, "$conf{'home'}/poll";
 		}
 	}
-
+=cut
 	# Print list of messages
 	&list_messages($collections);
 }

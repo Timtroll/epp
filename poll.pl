@@ -2,18 +2,21 @@
 
 use strict;
 use warnings;
+use Encode qw(encode decode);
 use Net::EPP::Simple;
+use Net::EPP::Simple;
+
 use XML::Simple;
 use MongoDB;
+
+use Time::Local;
 
 print "Content-type: text/html; charset = utf-8\nPragma: no-cache\n\n";
 
 our (%conf, %collection, %months, %week, %in, %tmpl, %mesg, %domain_mail, %command_epp, %commands, %menu_line);
 require "drs.pm";
 
-my ($collections, $epp, $resp, $xml, $xml2json, $obj, $count, $frame, $log);
-$collections = &connect($conf{'database'}, $collection{'messages'});
-$log = &connect($conf{'database'}, $collection{'log_poll'});
+my ($collections, $epp, $resp, $xml, $xml2json, $obj, $count, $frame, $log, @tmp);
 
 # Connect to Epp server
 $epp = &connect_epp();
@@ -22,9 +25,16 @@ $epp = &connect_epp();
 $frame = Net::EPP::Frame::Command::Poll::Req->new;
 $resp = $epp->request($frame);
 
+
+# print $Net::EPP::Simple::Code;
+# print $Net::EPP::Simple::Error;
+# print $Net::EPP::Simple::Message;
+
 # Store new message if have not errors & message not exists in a base
 # Get & store new message
 $xml = $resp->toString(1);
+
+# print Dumper($xml);
 
 # Convert XML response to object
 $xml2json = XML::Simple->new();
@@ -34,26 +44,31 @@ $obj = $xml2json->XMLin($xml, KeyAttr => '');
 $obj->{'response'}->{'status'} = 'new';
 $obj->{'response'}->{'id'} = $obj->{'response'}->{'msgQ'}->{'id'};
 
-# check response errors
-&check_response($obj, 2001, 2004);
+# print $obj->{'response'}->{'id'};
+# print $in{'messages'};
+# print Dumper($obj);
 
-if () {
+if ($obj->{'response'}->{'id'}) {
+	$collections = &connect($conf{'database'}, $collection{'messages'});
+	$log = &connect($conf{'database'}, $collection{'log_poll'});
+
 	# Calculate exist same message in the databse
-	$count = $collections -> find( { 'id' => $obj->{'response'}->{'msgQ'}->{'id'} } ) -> count;
+	$count = $collections -> find( { 'id' => $obj->{'response'}->{'id'} } ) -> count;
 
 	# Insert message into message base if not exists
-	$collections->insert( $obj->{'response'} );
+#	$collections->insert( $obj->{'response'} );
 
-	unless (-e "$conf{'home'}/poll") {
-		# set flag-file for mail icon
-		open (FILE, ">$conf{'home'}/poll") or &error_log($log, 'system', "Could not open to write: $conf{'home'}/poll : $!");
-			print FILE "";
-		close (FILE) or &error_log($log, 'system', "Could not open to write: $conf{'home'}/poll : $!");
-		chmod 0666, "$conf{'home'}/poll";
-	}
+	unless ($count) {
+		unless (-e "$conf{'home'}/poll") {
+print "=$count=";
+print $obj->{'response'}->{'id'};
 
-		# Connect to Epp server
-		$epp = &connect_epp();
+			# set flag-file for mail icon
+			open (FILE, ">$conf{'home'}/poll") or &error_log($log, 'system', "Could not open to write: $conf{'home'}/poll : $!");
+				print FILE "";
+			close (FILE) or &error_log($log, 'system', "Could not open to write: $conf{'home'}/poll : $!");
+			chmod 0666, "$conf{'home'}/poll";
+		}
 
 		# Ack this message
 		$frame = Net::EPP::Frame::Command::Poll::Ack->new;
@@ -67,21 +82,11 @@ if () {
 
 		# check response errors
 		&check_response($obj, 2001, 2004, 2400);
-
-		if ($obj->{'response'}->{'result'}->{'code'} == 1000) {
-			$in{'messages'} .= $mesg{'message_read_success'};
-
-			# Change status of this message if ack to dequeue
-			$collections -> update( { '_id' => $tmp[0]->{'_id'} }, { '$set' => { 'status' => 'old' } } );
-
-			# remove flag-file for mail css
-			unlink ("$conf{'home'}/poll");
-		}
-		elsif ($obj->{'response'}->{'result'}->{'code'} == 2400) {
-			$in{'messages'} .= $mesg{'message_already_read'};
-		}
-}
-else {
+print $obj->{'response'}->{'result'}->{'code'};
+#		if ($obj->{'response'}->{'result'}->{'code'} == 1000) {
+			&error_log($log, 'epp', "We has EPP error during Ack massage");
+#		}
+	}
 }
 
 print "Good";
@@ -129,7 +134,7 @@ sub connect {
 	# Read list of domains
 	$client = MongoDB::Connection -> new(host => $conf{'db_link'});
 	$db = $client -> get_database( $base );
-	$collections = $db->get_collection( $col);
+	$collections = $db->get_collection( $col );
 
 	return $collections;
 }
@@ -147,12 +152,7 @@ sub connect_epp {
 	);
 
 	if (($Net::EPP::Simple::Code == 2500)||($Net::EPP::Simple::Code == 2501)||($Net::EPP::Simple::Code == 2502)) {
-		&main(
-			'title'		=> $mesg{'epp_connection_error'},
-			'path'		=> '/ '.$mesg{'epp_connection_error'}.' : Code '.$Net::EPP::Simple::Code,
-			'messages'	=> $Net::EPP::Simple::Message."<br>".$Net::EPP::Simple::Error,
-			'content'	=> "<a href='$conf{'public_cgi'}' color='blue'>$mesg{'goto_start'}</a>",
-		);
+		$in{'messages'} = $Net::EPP::Simple::Message."<br>".$Net::EPP::Simple::Error;
 	}
 
 	return $epp;
@@ -170,9 +170,9 @@ sub error_log {
 
 	$srting = {
 		'time'	=> time(),
-		'type'		=> $data ? $data : '' ,
+		'type'		=> $data ? $data : '' 
 	};
-	$collection->insert( $srting->{'data'}->$data );
+	$collection->insert( $srting );
 
 	$data = $srting = '';
 	return;
