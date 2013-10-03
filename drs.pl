@@ -267,7 +267,6 @@ sub domain_renew {
 	}
 
 	# Create renew object
-#	$html = &date2sec($tmp[0]->{'exDate'});
 	$html = $tmp[0]->{'exDate'};
 	unless ($in{'domain'} =~ /.ua$/) {
 #		$html=~s/2013/2014/;
