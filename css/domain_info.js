@@ -18,6 +18,7 @@ function MarkRead (cnt) {
 	window.document.getElementById('titl_'+cnt).className = 'mess';
 	window.document.getElementById('tit_'+cnt).className = 'mess';
 	window.document.getElementById('text_'+cnt).className = 'mess';
+	window.document.getElementById('date_'+cnt).className = 'mess';
 	window.document.getElementById('message').className = 'hide';
 	window.document.getElementById('status_'+cnt).innerHTML = 'old';
 }

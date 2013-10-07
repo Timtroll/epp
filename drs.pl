@@ -15,7 +15,6 @@ use LWP::Simple;
 use XML::Simple;
 #use JSON::XS;
 
-
 our (%conf, %collection, %months, %week, %in, %tmpl, %mesg, %domain_mail, %command_epp, %commands, %menu_line);
 our (@week, @sceleton);
 our ($domain_sceleton);
@@ -28,7 +27,7 @@ use Tie::IxHash;
 print "Content-type: text/html; charset = utf-8\nPragma: no-cache\n\n";
 
 # set limit to post request
-$CGI::POST_MAX = 1024;
+$CGI::POST_MAX = 16384;
 
 &read_param();
 if ($in{'query_domain'})	{ &query_domain(&connect($conf{'database'}, $collection{'domains'})); }
@@ -38,100 +37,22 @@ elsif ($in{'list_domains'})	{ &list_domains(&connect($conf{'database'}, $collect
 elsif ($in{'list_waiting'})	{ $in{'type_list'} = 'waiting'; &list_domains(&connect($conf{'database'}, $collection{'domains'})); }
 elsif ($in{'list_ending'})	{ $in{'type_list'} = 'ending'; &list_domains(&connect($conf{'database'}, $collection{'domains'})); }
 elsif ($in{'list_contacts'})	{ &list_contacts(&connect($conf{'database'}, $collection{'contacts'})); }
+elsif ($in{'list_messages'})	{ &list_messages(&connect($conf{'database'}, $collection{'messages'})); }
+elsif ($in{'list_transfer'})	{ &list_transfer(&connect($conf{'database'}, $collection{'messages'})); }
 elsif ($in{'domain_info'})	{ &domain_info(&connect($conf{'database'}, $collection{'domains'})); }
 elsif ($in{'calendar'})		{ &calendar(&connect($conf{'database'}, $collection{'domains'})); }
 elsif ($in{'price'})		{ &get_price(&connect($conf{'database'}, $collection{'zones'})); }
 elsif ($in{'get_price'})	{ &get_price(&connect($conf{'database'}, $collection{'zones'})); }
-elsif ($in{'poll'})		{ &get_poll(&connect($conf{'database'}, $collection{'messages'})); }
-elsif ($in{'get_mail'})		{ &get_mail(); }
 elsif ($in{'message_read'})	{ &message_read(&connect($conf{'database'}, $collection{'messages'})); }
 elsif ($in{'domain_create'})	{ &domain_create(&connect($conf{'database'}, $collection{'queue'})); }
 elsif ($in{'domain_save'})	{ &domain_save(&connect($conf{'database'}, $collection{'domains'})); }
 elsif ($in{'domain_update'}){ &domain_update(&connect($conf{'database'}, $collection{'domains'})); }
-elsif ($in{'domain_renew'}){ &domain_renew(&connect($conf{'database'}, $collection{'domains'})); }
+elsif ($in{'domain_renew'})	{ &domain_renew(&connect($conf{'database'}, $collection{'domains'})); }
 else					{ &main('title' => 'Стартовая'); }
 
-sub get_mail {
-	my ($html, $flag);
-
-	# set flag for mail css
-	$flag = 'old';
-	if (-e "$conf{'home'}/poll") {
-		$flag = 'new';
-	}
-
-	# Load mail frame template
-	$html = &load_tempfile('file' => $tmpl{'get_poll'});
-
-	print &small_parsing(
-		$html,
-		'public_cgi'	=> $conf{'public_cgi'},
-		'public_css'	=> $conf{'public_css'},
-		'public_url'	=> $conf{'public_url'},
-		'poll'		=> $flag
-	);
-
-	$html = '';
-	exit;
-}
-
-sub get_poll {
-	my ($collections, $epp, $resp, $xml, $xml2json, $obj, $count, $frame);
-	$collections = shift;
-=comment
-	# Connect to Epp server
-	$epp = &connect_epp();
-
-	# Send Request to get Poll
-	$frame = Net::EPP::Frame::Command::Poll::Req->new;
-	$resp = $epp->request($frame);
-
-	# Store new message if have not errors & message not exists in a base
-	# Get & store new message
-	$xml = $resp->toString(1);
-
-	# Convert XML response to object
-	$xml2json = XML::Simple->new();
-	$obj = $xml2json->XMLin($xml, KeyAttr => '');
-
-	# Add new fields to message object
-	$obj->{'response'}->{'status'} = 'new';
-	$obj->{'response'}->{'id'} = $obj->{'response'}->{'msgQ'}->{'id'};
-
-	# check response errors
-	&check_response($obj, 2001, 2004);
-
-	unless ($in{'messages'}) {
-		# Calculate exist same message in the databse
-		$count = $collections -> find( { 'id' => $obj->{'response'}->{'msgQ'}->{'id'} } ) -> count;
-
-		# Insert message into message base if not exists
-		if ($count) {
-			if (-e "$conf{'home'}/poll") {
-				$in{'messages'} = $mesg{'have_new_mess'};
-			}
-			else {
-				$in{'messages'} = $mesg{'have_not_new_mess'};
-			}
-		}
-		else {
-			$collections->insert( $obj->{'response'} );
-			$in{'messages'} = $mesg{'have_new_mess'};
-
-			# set flag-file for mail icon
-			open (FILE, ">$conf{'home'}/poll") or die;
-				print FILE "";
-			close (FILE);
-			chmod 0666, "$conf{'home'}/poll";
-		}
-	}
-=cut
-	# Print list of messages
-	&list_messages($collections);
-}
-
 sub domain_update {
-	my ($html, $key, $kkey, $info, $mess, $collections, $epp, @tmp, @temp, @differ, @diff, %count, %tmp);
+#	my ($html, $key, $kkey, $info, $mess, $collections, $epp, @tmp, @temp, @differ, @diff, %count, %tmp);
+	my ($html, $info, $mess, $collections, $epp, @tmp,  %tmp, %out);
 	$collections = shift;
 
 	# Prepare params data for sending
@@ -143,15 +64,20 @@ sub domain_update {
 			'add'		=> {
 				'contacts'	=> {
 					'tech'		=> $in{'contacts_tech'},
-					'billing'	=> $in{'contacts_billing'},
 					'admin'	=> $in{'contacts_admin'}
 				},
 			},
 			'chg'		=> {
 				'registrant'	=> $in{'registrant'},
-				'authInfo'	=> &create_rnd(10)
+				'authInfo'	=> &create_rnd(11)
 			}
 	};
+
+	# skip setting billing contact for *.kiev.ua
+	# unless (($in{'name'} =~ /^.*\.kiev\.ua$/)||($in{'name'} =~ /^.*\.com\.ua$/)) {
+# print "sdf\n\n";
+		# $domain_sceleton->{'add'}->{'contacts'}->{'billing'} = $in{'contacts_billing'};
+	# }
 
 	# 'add' segment 'ns'
 	@tmp = ();
@@ -174,12 +100,17 @@ sub domain_update {
 		$domain_sceleton->{'rem'}->{'ns'} = $info->{'ns'};
 	}
 
-	# Prepare remove contacts
+	# Prepare 'rem' contacts
 	if (($in{'contacts_tech'} ne $info->{'contacts'}->{'tech'})&&($in{'contacts_tech'})) {
 		$domain_sceleton->{'rem'}->{'contacts'}->{'tech'} = $info->{'contacts'}->{'tech'};
 	}
-	if (($in{'contacts_billing'} ne $info->{'contacts'}->{'billing'})&&($in{'contacts_billing'})) {
-		$domain_sceleton->{'rem'}->{'contacts'}->{'billing'} = $info->{'contacts'}->{'billing'};
+	if ($info->{'contacts'}->{'billing'}) {
+		if (($in{'contacts_billing'} ne $info->{'contacts'}->{'billing'})&&($in{'contacts_billing'})) {
+#			unless (($in{'name'} =~ /^.*\.kiev\.ua$/)||($in{'name'} =~ /^.*\.com\.ua$/)) {
+				$domain_sceleton->{'rem'}->{'contacts'}->{'billing'} = $info->{'contacts'}->{'billing'};
+				$domain_sceleton->{'add'}->{'contacts'}->{'billing'} = $in{'contacts_billing'};
+#			}
+		}
 	}
 	if (($in{'contacts_admin'} ne $info->{'contacts'}->{'admin'})&&($in{'contacts_admin'})) {
 		$domain_sceleton->{'rem'}->{'contacts'}->{'admin'} = $info->{'contacts'}->{'admin'};
@@ -190,10 +121,10 @@ print Dumper($domain_sceleton);
 	# Send create domain request
 	$epp = &connect_epp();
 
-
 	# Create new domain
 	$info = $epp->update_domain($domain_sceleton);
-	
+# print Dumper($info->{'response'});
+
 	# check response errors
 	&check_response('', 2001, 2003, 2004, 2005, 2201, 2302, 2303, 2307,  2309);
 
@@ -211,11 +142,21 @@ print $Net::EPP::Simple::Message;
 	# Send create domain request
 	$html = Dumper($domain_sceleton);
 
-	# Store new domain in the database
+	# Load mail frame template
+	$html = &load_tempfile('file' => $tmpl{'frame'});
 
-	&main(
-		'content'	=> $html
+	$out{'title'} = "<div class='title'>UPDATE домена $in{'domain'}</div>";
+	$out{'messages'} .= $Net::EPP::Simple::Error.' '.$Net::EPP::Simple::Code.' '.$Net::EPP::Simple::Message;
+	print &small_parsing(
+		$html,
+		'public_cgi'	=> $conf{'public_cgi'},
+		'public_css'	=> $conf{'public_css'},
+		'public_url'	=> $conf{'public_url'},
+		%out
 	);
+
+	$html = '';
+	exit;
 }
 
 sub domain_save {
@@ -319,34 +260,48 @@ sub domain_renew {
 }
 
 sub domain_create {
-	my ($collections, $epp, $info, $tmp, $html, @ns);
+	my ($collections, $epp, $info, $tmp, $html, @ns, @status);
 	$collections = shift;
+
+	# Prerare request obect
+	$domain_sceleton = {
+			'name'	=> $in{'name'},
+			'period'	=> $in{'period'},
+			'registrant'	=> $in{'registrant'},
+			'authInfo'	=> &create_rnd(10),
+			'contacts'	=> {
+				'tech'		=> $in{'contacts_tech'},
+				'billing'	=> $in{'contacts_billing'},
+				'admin'	=> $in{'contacts_admin'}
+			}
+	};
+	foreach (keys %in) {
+		if (/^ns/) { push @ns, $in{$_}; }
+		elsif (/^status/) { push @status, $in{$_}; }
+	}
+	$domain_sceleton->{'ns'} = \@ns;
+	$domain_sceleton->{'status'} = \@status;
+	if ($in{'domain'} =~ /[\w|\d-]*\.com\.ua$/) {
+		delete ($domain_sceleton->{'contacts'}->{'billing'});
+	}
+	if ($in{'domain'} =~ /[\w|\d-]*\.ua$/) {
+		$domain_sceleton->{'license'} = $in{'license'};
+	}
+print Dumper($domain_sceleton);
+exit;
+
 
 	# Send create domain request
 	$epp = &connect_epp();
 
-	# Prepare request
-	$domain_sceleton = $command_epp{'domain_create'};
-	$domain_sceleton->{'name'} = $in{'domain'};
-	$domain_sceleton->{'period'} = $in{'period'};
-	foreach (keys %in) {
-		if (/^ns/) { push @ns, $in{$_}; }
-	}
-	$domain_sceleton->{'ns'} = \@ns;
-	$domain_sceleton->{'registrant'} = $in{'registrant'};
-	$domain_sceleton->{'contacts'}->{'tech'} = $in{'contacts_tech'};
-	$domain_sceleton->{'contacts'}->{'admin'} = $in{'contacts_admin'};
-	$domain_sceleton->{'contacts'}->{'billing'} = $in{'contacts_billing'};
-
 	# Remove the unneeded fields
 	# Fields for *.com.ua domains
-	if ($in{'domain'} =~ /.*\.com\.ua$/) {
-		delete ($domain_sceleton->{'contacts'}->{'billing'});
-		delete ($domain_sceleton->{'license'});
-		delete ($domain_sceleton->{'authInfo'});
-	}
-print Dumper($domain_sceleton);
-
+#	if ($in{'domain'} =~ /.*\.com\.ua$/) {{
+#	if ($in{'domain'} =~ /.*\.com\.ua$/) {
+#		delete ($domain_sceleton->{'contacts'}->{'billing'});
+#		delete ($domain_sceleton->{'license'});
+#		delete ($domain_sceleton->{'authInfo'});
+#	}
 	# Create new domain
 	$info = $epp->create_domain($domain_sceleton);
 	
@@ -731,54 +686,38 @@ sub print_array {
 	$out .= '</ul>';
 }
 
-
 sub message_read {
 	my ($html, $out, $collections, $epp, $frame, $resp, $xml, $xml2json, $obj, $connect, @tmp, %mess);
 	$collections = shift;
 
 	# Find & read message
-	@tmp = $collections -> find( { 'id' => $in{'id'} } )->all;
+	@tmp = $collections -> find( { 'message_id' => $in{'id'} } )->all;
 
 	if (scalar(@tmp) == 1) {
 		# Create html for message
 		$out = &info_table($tmp[0]);
 
-		# Connect to Epp server
-		$epp = &connect_epp();
-
-		# Ack this message
-		$frame = Net::EPP::Frame::Command::Poll::Ack->new;
-		$frame->setMsgID($in{'id'});
-		$resp = $epp->request($frame);
-
-		# Convert XML response to object
-		$xml = $resp->toString(1);
-		$xml2json = XML::Simple->new();
-		$obj = $xml2json->XMLin($xml, KeyAttr => '');
-
-		# check response errors
-		&check_response($obj, 2001, 2004, 2400);
-
-		if ($obj->{'response'}->{'result'}->{'code'} == 1000) {
+		if ($tmp[0]->{'status'} eq 'new') {
 			$in{'messages'} .= $mesg{'message_read_success'};
-
-			# Change status of this message if ack to dequeue
-			$collections -> update( { '_id' => $tmp[0]->{'_id'} }, { '$set' => { 'status' => 'old' } } );
-
-			# remove flag-file for mail css
-			unlink ("$conf{'home'}/poll");
 		}
-		elsif ($obj->{'response'}->{'result'}->{'code'} == 2400) {
-			$in{'messages'} .= $mesg{'message_already_read'};
+
+		# Change status of this message if ack to dequeue
+		$collections -> update( { '_id' => $tmp[0]->{'_id'} }, { '$set' => { 'status' => 'old' } } );
+
+		# remove flag-file for mail css
+		@tmp = ();
+		@tmp = $collections -> find( { 'status' =>'new' } )->all;
+		unless (scalar(@tmp)) {
+			unlink ("$conf{'home'}/poll");
 		}
 	}
 	elsif (scalar(@tmp) > 1) {
 		# we have dublicate
-# ????????
+		$in{'messages'} = $mesg{'double_mess'}.$in{'id'};
 	}
 	else {
 		$in{'messages'} = $mesg{'have_not_id_mess'};
-		&get_poll($collections);
+		&list_messages($collections);
 	}
 	
 	$html = &load_tempfile('file' => $tmpl{'frame'});
@@ -795,31 +734,6 @@ sub message_read {
 	exit;
 }
 
-sub message_mark {
-	my ($epp, $html, $info, $mess, $comm, $out, $collections, $cmpr, @tmp);
-	$collections = shift;
-
-	# Find message & get id
-	@tmp = $collections -> find( { 'name' => $in{'domain'} } ) -> all;
-
-	# Connect to Epp server
-	$epp = &connect_epp();
-
-	$html = &load_tempfile('file' => $tmpl{'frame'});
-	$comm = &create_command_list('frame');
-
-	print &small_parsing(
-		$html,
-		'public_cgi'	=> $conf{'public_cgi'},
-		'public_css'	=> $conf{'public_css'},
-		'title'		=> '<div class="title">Read massage</div>',
-		'commands'=> $comm,
-		'info'		=> $out
-	);
-
-	exit;
-}
-
 sub domain_info {
 	my ($html, $info, $mess, $comm, $out, $collections, $cmpr, @tmp);
 	$collections = shift;
@@ -830,7 +744,6 @@ sub domain_info {
 	# delete system field
 	delete $info->{'request'};
 	delete $info->{'response'};
-
 
 	@tmp = $collections -> find( { 'name' => $in{'domain'} } ) -> all;
 
@@ -930,10 +843,10 @@ sub list_contacts {
 }
 
 sub list_messages {
-	my ($collections, $html, $list, $raw, $class, $path, $count, @data, @tmp, %comm);
+	my ($collections, $html, $list, $raw, $class, $path, $count, @data, @tmp);
 	$collections = shift;
 
-	@data = $collections -> find( {} ) -> sort( { 'id' => -1 } ) -> all;
+	@data = $collections -> find( {} ) -> sort( { 'message_id' => -1 } ) -> all;
 	$path = $mesg{'list_message_all'};
 
 	# Read templates
@@ -966,17 +879,6 @@ sub list_messages {
 			$tmp[3] = 'messbl';
 		}
 
-		# Prerare command for messages
-		%comm = (
-			'read'	=> "<li><a href='#modalopen' onClick=\"javascript:open_frame('$conf{'public_cgi'}?message_read=1&id=".$data[$_] -> {'msgQ'} -> {'id'}."'); MarkRead('$count');\" class='text'>Read</a></li>",
-			'mark'	=> &create_command('Mark',
-						'message_mark'=> 1,
-						'id'		=> $data[$_] -> {'msgQ'} -> {'id'},
-						'class'	=> 'text'
-					),
-			'title'		=> "<li class='$tmp[3]' id='tit_$count'><a href='#modalopen' onClick=\"javascript:open_frame('$conf{'public_cgi'}?message_read=1&id=".$data[$_] -> {'msgQ'} -> {'id'}."'); MarkRead('$count');\" class='$tmp[3]' id='title_$count'>$tmp[0]</a></li>"
-		);
-
 		$list .= &small_parsing(
 			$raw,
 			'public_cgi'	=> $conf{'public_cgi'},
@@ -986,11 +888,13 @@ sub list_messages {
 			'text_class'	=> $tmp[2],
 			'class'	=> $class,
 			'count'	=> $count,
-			%comm
+			'date'		=> &sec2date(&date2sec($data[$_] -> {'msgQ'} -> {'qDate'}), '.'),
+			'title'		=> "<li class='$tmp[3]' id='tit_$count'><a href='#modalopen' onClick=\"javascript:open_frame('$conf{'public_cgi'}?message_read=1&id=".$data[$_] -> {'msgQ'} -> {'id'}."'); MarkRead('$count');\" class='$tmp[3]' id='title_$count'>$tmp[0]</a></li>"
 		);
 		@tmp = ();
 		unless ($class) { $class = 'lineh'; }
 		else { $class = ''; }
+		$count++;
 	}
 
 	$html = &small_parsing(
@@ -1515,12 +1419,11 @@ sub main {
 	}
 
 	# create menu
-	foreach $key (keys %menu_line) {
+	foreach $key (sort {$a <=> $b} keys %menu_line) {
 		$menu = '';
 		$cnt = 0;
 		foreach $kkey (@{$menu_line{$key}}) {
 			foreach (keys %{$kkey}) {
-				# $menu .=  &create_command($_, 'form' => 'menu_form', 'post' => 'qwe');
 				$menu .=  &create_command($$kkey{$_}, 'form' => 'menu_form', 'post' => $_);
 			}
 			$cnt++;
@@ -1598,25 +1501,27 @@ sub chck_domain {
 
 		);
 	}
+
 	if ($in{'domain'}) {
 		# Connect to Epp server
 		$epp = &connect_epp();
 
 		# check domain
 		$info = $epp->domain_info($in{'domain'});
-		
+
 		&check_response($info, 2001);
 
 		if ($Net::EPP::Simple::Code == 1000) {
 			# Convert response to UTF8
 			$info = &obj2utf($info);
 
-			$in{'messages'} = "Домен зарегистрирован. Последнее обновление ".$info->{upDate}." till ".$info->{exDate}." by ".$info->{clID};
+			$in{'messages'} .= "Домен зарегистрирован. ";
+			$in{'messages'} .= "Последнее обновление ".$info->{upDate} if $info->{upDate};
+			$in{'messages'} .= ". Домен зарегистрирован до ".$info->{exDate} if $info->{exDate};
 		}
-#		elsif ($Net::EPP::Simple::Code == 2303) {
-#			$mess = "Домен свободен";
-#		}
-#		else {
+		elsif ($Net::EPP::Simple::Code == 2303) {
+			$in{'messages'} .= "Домен зарегистрирован. ";
+		}
 		elsif ($Net::EPP::Simple::Code == 2001 || $Net::EPP::Simple::Code == 2202) {
 			$in{'messages'} .= "Ошибка EPP: <li>$Net::EPP::Simple::Code</li><li>$Net::EPP::Simple::Message</li><li>$Net::EPP::Simple::Error</li>";
 		}
@@ -1915,27 +1820,7 @@ sub create_command_list {
 
 	return $out;
 }
-=comment
-sub create_command_list {
-	my ($comm, $out, $tmp, $frame);
-	$frame = shift;
 
-	$comm = &load_tempfile('file' => $tmpl{'commands'});
-	$tmp = 'request_form';
-	if ($frame) { $tmp = 'frame_'.$tmp; }
-	foreach (sort {$b cmp $a} keys %commands) {
-		$out .= &create_command($_, 'form' => $tmp, 'post' => $commands{$_});
-	}
-	$out = &small_parsing(
-		$comm,
-		'public_cgi'	=> $conf{'public_cgi'},
-		'commands'=> $out
-	);
-	$comm = '';
-
-	return $out;
-}
-=cut
 sub create_command {
 	my ($text, $tag, $key, $comm, $tmp, %hach);
 	$text = shift;
@@ -2117,7 +2002,8 @@ sub put_mail_auth {
 sub create_rnd {
 	my ($amount, $out, @chars);
 	$amount = shift;
-	
+
+	$amount--;
 	@chars = split('', 'Aa0Bb1Cc2Dd3Ee4Ff5Gg6Hh7Ii8Jj9KkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz');
 	$out = join("", @chars[ map{ rand @chars } (0 .. $amount) ]);
 

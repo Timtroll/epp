@@ -4,6 +4,7 @@
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
 <title><%title%></title>
 <link href="<%public_css%>/style.css" rel="stylesheet" type="text/css" />
+<link href="<%public_css%>/bowl.css" rel="stylesheet" type="text/css" />
 <style>
 html, body {
 	width: 100%;
@@ -38,13 +39,10 @@ th {
 <script src="<%public_css%>/domain_info.js"></script>
 <script>
 function reloadIt() {
-	var ifrm = document.getElementById('mymail');
-	var doc = ifrm.contentDocument? ifrm.contentDocument: ifrm.contentWindow.document;
-	if ( doc.getElementById('poll').value) {
-		var form = doc.getElementById('poll').value;
-		if (form == 'old') { document.getElementById("mymail").src='<%public_cgi%>?get_mail=1'; }
-		else { document.getElementById("mymail").src='<%public_cgi%>?get_mail=1'; }
-	}
+	document.getElementById("mymail").src='<%public_url%>/check_mail.pl';
+}
+function reloadItT() {
+	document.getElementById("mymail").src='<%public_url%>/check_transfer.pl';
 }
 </script>
 </head>
@@ -59,8 +57,35 @@ function reloadIt() {
     <form action="<%public_cgi%>" id="menu_form" method="post"><%menu%></form>
    </div>
 </td>
+       <td width="40" align="center" valign="top">
+       <form action="<%public_cgi%>" id="transfer_form" method="post">
+       <div id="bowl" class="bowl-hide">
+         <div id="bowlG" class="bowlG" onclick="javascript:PostData(this, 'transfer_form', 'list_messages');">
+           <div id="bowl_ringG" class="bowl_ringG">
+             <div id="bowl_txtT" class="bowl_txtT">T</div>
+             <div id="ball_holderG" class="ball_holderG">
+               <div id="ballG" class="ballG"></div>
+             </div>
+           </div>
+         </div>
+       </div>
+       </form>
+       </td>
 <%query%>
-       <td width="40" align="right" valign="middle"><div id="dd"><iframe onLoad="javascript: setTimeout('reloadIt()',300000);" class='mailframe' name='mymail' id='mymail' frameBorder='0' style='border: 0; display: block; width: 26px; height: 26px' src='<%public_cgi%>?get_mail=1'></iframe></div></td>
+       <td width="30" align="right" valign="top">
+       <form action="<%public_cgi%>" id="message_form" method="post">
+         <div id="bowlPoll" class="bowl-hide">
+           <div id="bowlGPoll" class="bowlG" onclick="javascript:PostData(this, 'message_form', 'list_messages');">
+             <div id="bowl_ringGPoll" class="bowl_ringG">
+               <div id="bowl_txtPoll" class="bowl_txt">@</div>
+               <div id="ball_holderGPoll" class="ball_holderG">
+                 <div id="ballGPoll" class="ballG"></div>
+               </div>
+             </div>
+           </div>
+         </div>
+       </form>
+       </td>
        <td width="40" align="right" valign="middle"><a href="#" onclick="javascript:document.location.href='<%public_cgi%>?logout=1';"><img src="<%public_css%>/logout.png" width="24" height="24" align="right"  class="logout"/></a></td>
 	  </tr>
 	 </table>
@@ -80,5 +105,7 @@ function reloadIt() {
   </div>
 </div>
 <div id="command_fields" style="display:none;"></div>
+<iframe onLoad="javascript: setTimeout('reloadIt()',300000);" name='mymail' id='mymail' style='display:none;' src='<%public_url%>/check_mail.pl'></iframe>
+<iframe onLoad="javascript: setTimeout('reloadItT()',300000);" name='Tmymail' id='Tmymail' style='display:none;' src='<%public_url%>/check_transfer.pl'></iframe>
  </body>
 </html>
