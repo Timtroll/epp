@@ -94,7 +94,7 @@ if ($obj->{'response'}->{'message_id'}) {
 	# Set flag for message reader if message not exists in base and flag not exists too
 	unless ($count) {
 		# Insert message into message base if not exists
-		$collections->insert( $obj->{'response'} );
+#		$collections->insert( $obj->{'response'} );
 
 		unless (-e "$conf{'home'}/poll") {
 			# set flag-file for mail icon
