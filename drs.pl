@@ -129,7 +129,8 @@ print Dumper($domain_sceleton);
 	$epp = &connect_epp();
 
 	# Create new domain
-	$info = $epp->update_domain($domain_sceleton);
+#	$info = $epp->remove($in{'name'});
+#	$info = $epp->insert($domain_sceleton);
 # print Dumper($info->{'response'});
 
 	# check response errors
