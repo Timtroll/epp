@@ -58,7 +58,6 @@ elsif ($in{'domain_renew'})	{ &domain_renew(&connect($conf{'database'}, $collect
 else					{ &main('title' => 'Стартовая'); }
 
 sub domain_update {
-#	my ($html, $key, $kkey, $info, $mess, $collections, $epp, @tmp, @temp, @differ, @diff, %count, %tmp);
 	my ($html, $info, $mess, $collections, $epp, @tmp,  %tmp, %out);
 	$collections = shift;
 
@@ -128,9 +127,8 @@ print Dumper($domain_sceleton);
 	# Send create domain request
 	$epp = &connect_epp();
 
-	# Create new domain
-#	$info = $epp->remove($in{'name'});
-#	$info = $epp->insert($domain_sceleton);
+	# Update domain by EPP
+	$info = $epp->update($domain_sceleton);
 # print Dumper($info->{'response'});
 
 	# check response errors
@@ -149,6 +147,15 @@ print $Net::EPP::Simple::Message;
 
 	# Send create domain request
 	$html = Dumper($domain_sceleton);
+
+	# Find and Update domain status to 'updating' in the base
+	@tmp = $collections->find( { 'name' => $in{'name'} } )->all;
+	if (scalar(@tmp) == 1) {
+		$collections->update( { '_id' => $tmp[0]->{'_id'}}, { '$set' => { 'type' => 'updating' } } );
+	}
+	else {
+		$out{'messages'} .= "В базе  несколько записей о домене $in{'name'}";
+	}
 
 	# Load mail frame template
 	$html = &load_tempfile('file' => $tmpl{'frame'});
@@ -185,9 +192,9 @@ sub domain_save {
 		$info = &obj2utf($info);
 
 		# Add required fields
-		$info -> {'expires'} = &date2sec($info -> {'exDate'});
-		$info -> {'date'} = &sec2date($info -> {'expires'}, 'md');
-		$info -> {'upDate'} = '';
+		$info->{'expires'} = &date2sec($info->{'exDate'});
+		$info->{'date'} = &sec2date($info->{'expires'}, 'md');
+		$info->{'upDate'} = '';
 
 		# Add new domain to database
 		$collections->insert( $info );
@@ -207,7 +214,7 @@ sub domain_renew {
 
 	# Find current domain in database
 	$in{'domain'} = $in{'name'};
-	@tmp = $collections -> find( { 'name' => $in{'domain'} } ) -> all;
+	@tmp = $collections->find( { 'name' => $in{'domain'} } )->all;
 
 	# Create error if domain more than one
 	if ((scalar(@tmp) > 1) || (scalar(@tmp) == 0)) {
@@ -424,7 +431,7 @@ sub get_price {
 	$flag = shift;
 
 	# Read exists price in database
-	%data = map { $_-> {'zone'}, $_ } $connect -> find( {}, { 'zone' => 1 } ) -> all;
+	%data = map { $_-> {'zone'}, $_ } $connect->find( {}, { 'zone' => 1 } )->all;
 
 	if ($flag) {
 		# Get new price
@@ -502,14 +509,14 @@ sub find_domains {
 	$search = $tmp[4].$tmp[3];
 	if ($tmp[4] < 10) { $search = "0".$search; }
 	@tmp = ();
-	$tmp[0] = $collections -> find( { 'date' => $search } ) -> count;
+	$tmp[0] = $collections->find( { 'date' => $search } )->count;
 
 	# variable for check domain expires (current time + )
 	$curtime = time + 86400;
 	if ($tmp[0]) {
-		$tmp[1] = $collections -> find( { 'date' => $search ,  'status.0' => 'ok', 'expires' => { '$lt' => $curtime } } )  -> count;
-		$tmp[2] = $collections -> find( { 'date' => $search ,  'status.0' => 'ok', 'expires' => { '$gt' => $curtime } } )  -> count;
-		$tmp[3] = $collections -> find( { 'date' => $search ,  'status.0' => qr/hold/i } )  -> count;
+		$tmp[1] = $collections->find( { 'date' => $search ,  'status.0' => 'ok', 'expires' => { '$lt' => $curtime } } ) ->count;
+		$tmp[2] = $collections->find( { 'date' => $search ,  'status.0' => 'ok', 'expires' => { '$gt' => $curtime } } ) ->count;
+		$tmp[3] = $collections->find( { 'date' => $search ,  'status.0' => qr/hold/i } ) ->count;
 
 		# Fotmat output
 		map { unless ($_) { $_ = " $_"; } } (@tmp);
@@ -699,7 +706,7 @@ sub message_read {
 	$collections = shift;
 
 	# Find & read message
-	@tmp = $collections -> find( { 'message_id' => $in{'id'} } )->all;
+	@tmp = $collections->find( { 'message_id' => $in{'id'} } )->all;
 
 	if (scalar(@tmp) == 1) {
 		# Create html for message
@@ -710,11 +717,11 @@ sub message_read {
 		}
 
 		# Change status of this message if ack to dequeue
-		$collections -> update( { '_id' => $tmp[0]->{'_id'} }, { '$set' => { 'status' => 'old' } } );
+		$collections->update( { '_id' => $tmp[0]->{'_id'} }, { '$set' => { 'status' => 'old' } } );
 
 		# remove flag-file for mail css
 		@tmp = ();
-		@tmp = $collections -> find( { 'status' =>'new' } )->all;
+		@tmp = $collections->find( { 'status' =>'new' } )->all;
 		unless (scalar(@tmp)) {
 			unlink ("$conf{'home'}/poll");
 		}
@@ -753,7 +760,7 @@ sub domain_info {
 	delete $info->{'request'};
 	delete $info->{'response'};
 
-	@tmp = $collections -> find( { 'name' => $in{'domain'} } ) -> all;
+	@tmp = $collections->find( { 'name' => $in{'domain'} } )->all;
 
 	# delete system field
 	$cmpr = $tmp[0];
@@ -785,7 +792,7 @@ sub list_contacts {
 	$collections = shift;
 
 	# Read list of contacts
-	@data = $collections -> find -> sort( {'name' => 1} ) -> all;
+	@data = $collections->find->sort( {'name' => 1} )->all;
 	$path = $mesg{'list_domains'};
 
 	# Read templates
@@ -797,39 +804,39 @@ sub list_contacts {
 
 	foreach (0..(scalar(@data) - 1)) {
 		%comm = (
-			'info'			=> "<li><a href='#modalopen' onClick=\"javascript:open_frame('$conf{'public_cgi'}?domain_info=1&domain=".$data[$_] -> {'name'}."');\" class='text'>info</a></li>",
+			'info'			=> "<li><a href='#modalopen' onClick=\"javascript:open_frame('$conf{'public_cgi'}?domain_info=1&domain=".$data[$_]->{'name'}."');\" class='text'>info</a></li>",
 			'suspend'		=> &create_command('Suspend',
 							'domain_suspend'=> 1,
-							'domain'		=> $data[$_] -> {'name'}
+							'domain'		=> $data[$_]->{'name'}
 						),
 			'renew'		=> &create_command('Renew',
 							'domain_renew'	=> 1,
-							'domain'		=> $data[$_] -> {'name'}
+							'domain'		=> $data[$_]->{'name'}
 						),
 			'update'		=> &create_command('Modify',
 							'domain_update'	=> 1,
-							'domain'		=> $data[$_] -> {'name'}
+							'domain'		=> $data[$_]->{'name'}
 						),
 			'transfert'		=> &create_command('Transfert',
 							'domain_transfert'=> 1,
-							'domain'		=> $data[$_] -> {'name'}
+							'domain'		=> $data[$_]->{'name'}
 						),
 			'delete'		=> &create_command('Delete',
 							'domain_delete'	=> 1,
-							'domain'		=> $data[$_] -> {'name'}
+							'domain'		=> $data[$_]->{'name'}
 						)
 		);
 
 		# Convert date from sec to europe format
-		if ($data[$_] -> {'expires'}) {
-			$data[$_] -> {'expires'} = &sec2date($data[$_] -> {'expires'});
+		if ($data[$_]->{'expires'}) {
+			$data[$_]->{'expires'} = &sec2date($data[$_]->{'expires'});
 		}
 		$list .= &small_parsing(
 			$raw,
 			'public_cgi'	=> $conf{'public_cgi'},
-			'domain'	=> &create_command($data[$_] -> {'name'}, 'class' => 'dom'),
+			'domain'	=> &create_command($data[$_]->{'name'}, 'class' => 'dom'),
 			'class'	=> $class,
-			'expires'	=> $data[$_] -> {'expires'},
+			'expires'	=> $data[$_]->{'expires'},
 			%comm
 		);
 		unless ($class) { $class = 'lineh'; }
@@ -854,7 +861,7 @@ sub list_messages {
 	my ($collections, $html, $list, $raw, $class, $path, $count, @data, @tmp);
 	$collections = shift;
 
-	@data = $collections -> find( {} ) -> sort( { 'message_id' => -1 } ) -> all;
+	@data = $collections->find( {} )->sort( { 'message_id' => -1 } )->all;
 	$path = $mesg{'list_message_all'};
 
 	# Read templates
@@ -865,16 +872,16 @@ sub list_messages {
 	$count = 1;
 	foreach (0..(scalar(@data) - 1)) {
 		@tmp = (
-			$data[$_] -> {'msgQ'} -> {'msg'},
+			$data[$_]->{'msgQ'}->{'msg'},
 			'',
 			'mess',
 			'mess'
 		);
-		if ($data[$_] -> {'resData'} -> {'drs:notify'} -> {'drs:message'}) {
-			$tmp[1] = $data[$_] -> {'resData'} -> {'drs:notify'} -> {'drs:message'};
+		if ($data[$_]->{'resData'}->{'drs:notify'}->{'drs:message'}) {
+			$tmp[1] = $data[$_]->{'resData'}->{'drs:notify'}->{'drs:message'};
 		}
 		else {
-			$tmp[1] = $data[$_] -> {'result'} -> {'msg'};
+			$tmp[1] = $data[$_]->{'result'}->{'msg'};
 		}
 		if (length($tmp[0]) > 25) {
 			$tmp[0] = substr($tmp[0], 0, 25).'...';
@@ -882,7 +889,7 @@ sub list_messages {
 		if (length($tmp[1]) > 72) {
 			$tmp[1] = substr($tmp[1], 0, 72).'...';
 		}
-		if ($data[$_] -> {'status'} =~ /^new$/) {
+		if ($data[$_]->{'status'} =~ /^new$/) {
 			$tmp[2] = 'messb';
 			$tmp[3] = 'messbl';
 		}
@@ -890,14 +897,14 @@ sub list_messages {
 		$list .= &small_parsing(
 			$raw,
 			'public_cgi'	=> $conf{'public_cgi'},
-			'id'		=> $data[$_] -> {'msgQ'} -> {'id'},
+			'id'		=> $data[$_]->{'msgQ'}->{'id'},
 			'text'		=> $tmp[1],
-			'status'	=> $data[$_] -> {'status'},
+			'status'	=> $data[$_]->{'status'},
 			'text_class'	=> $tmp[2],
 			'class'	=> $class,
 			'count'	=> $count,
-			'date'		=> &sec2date(&date2sec($data[$_] -> {'msgQ'} -> {'qDate'}), '.'),
-			'title'		=> "<li class='$tmp[3]' id='tit_$count'><a href='#modalopen' onClick=\"javascript:open_frame('$conf{'public_cgi'}?message_read=1&id=".$data[$_] -> {'msgQ'} -> {'id'}."'); MarkRead('$count');\" class='$tmp[3]' id='title_$count'>$tmp[0]</a></li>"
+			'date'		=> &sec2date(&date2sec($data[$_]->{'msgQ'}->{'qDate'}), '.'),
+			'title'		=> "<li class='$tmp[3]' id='tit_$count'><a href='#modalopen' onClick=\"javascript:open_frame('$conf{'public_cgi'}?message_read=1&id=".$data[$_]->{'msgQ'}->{'id'}."'); MarkRead('$count');\" class='$tmp[3]' id='title_$count'>$tmp[0]</a></li>"
 		);
 		@tmp = ();
 		unless ($class) { $class = 'lineh'; }
@@ -923,31 +930,31 @@ sub list_domains {
 
 	# Read list of domains
 	if (($in{'type_list'} eq 'all') && ($in{'date'})) {
-		@data = $collections -> find( { 'date' => $in{'date'} } ) -> sort( {'name' => 1} ) -> all;
+		@data = $collections->find( { 'date' => $in{'date'} } )->sort( {'name' => 1} )->all;
 		$path = $mesg{'list_domains_all'}.&sec2date($in{'time'},'.');
 	}
 	elsif (($in{'type_list'} eq 'expires') && ($in{'date'})) {
-		@data = $collections -> find( { 'date' => $in{'date'},  'status.0' => qr/hold/i } ) -> sort( {'name' => 1} ) -> all;
+		@data = $collections->find( { 'date' => $in{'date'},  'status.0' => qr/hold/i } )->sort( {'name' => 1} )->all;
 		$path = $mesg{'list_domains_end'}.&sec2date($in{'time'},'.');
 	}
 	elsif (($in{'type_list'} eq 'expired') && ($in{'date'})) {
-		@data = $collections -> find( { 'date' => $in{'date'},  'status.0' => 'ok', 'expires' => { '$gt' => time } } ) -> sort( {'name' => 1} ) -> all;
+		@data = $collections->find( { 'date' => $in{'date'},  'status.0' => 'ok', 'expires' => { '$gt' => time } } )->sort( {'name' => 1} )->all;
 		$path = $mesg{'list_domains_ok'}.&sec2date($in{'time'},'.');
 	}
 	elsif (($in{'type_list'} eq 'waiting') && ($in{'date'})) {
-		@data = $collections -> find( { 'date' => $in{'date'},  'status.0' => 'ok', 'expires' => { '$lt' => time } } ) -> sort( {'name' => 1} ) -> all;
+		@data = $collections->find( { 'date' => $in{'date'},  'status.0' => 'ok', 'expires' => { '$lt' => time } } )->sort( {'name' => 1} )->all;
 		$path = $mesg{'list_domains_wait'}.&sec2date($in{'time'},'.');
 	}
 	elsif (($in{'type_list'} eq 'waiting')) {
-		@data = $collections -> find( { 'status.0' => 'ok', 'expires' => { '$gt' => time } } ) -> sort( {'name' => 1} ) -> all;
+		@data = $collections->find( { 'status.0' => 'ok', 'expires' => { '$gt' => time } } )->sort( {'name' => 1} )->all;
 		$path = $mesg{'list_domains'};
 	}
 	elsif (($in{'type_list'} eq 'ending')) {
-		@data = $collections -> find( { 'status.0' => 'ok', 'expires' => { '$lt' => time } } ) -> sort( {'name' => 1} ) -> all;
+		@data = $collections->find( { 'status.0' => 'ok', 'expires' => { '$lt' => time } } )->sort( {'name' => 1} )->all;
 		$path = $mesg{'list_domains'};
 	}
 	else {
-		@data = $collections -> find -> sort( {'name' => 1} ) -> all;
+		@data = $collections->find->sort( {'name' => 1} )->all;
 		$path = $mesg{'list_domains'};
 	}
 
@@ -958,39 +965,39 @@ sub list_domains {
 
 	foreach (0..(scalar(@data) - 1)) {
 		%comm = (
-			'info'			=> "<li><a href='#modalopen' onClick=\"javascript:open_frame('$conf{'public_cgi'}?domain_info=1&domain=".$data[$_] -> {'name'}."');\" class='text'>info</a></li>",
+			'info'			=> "<li><a href='#modalopen' onClick=\"javascript:open_frame('$conf{'public_cgi'}?domain_info=1&domain=".$data[$_]->{'name'}."');\" class='text'>info</a></li>",
 			'suspend'		=> &create_command('Suspend',
 							'domain_suspend'=> 1,
-							'domain'		=> $data[$_] -> {'name'}
+							'domain'		=> $data[$_]->{'name'}
 						),
 			'renew'		=> &create_command('Renew',
 							'domain_renew'	=> 1,
-							'domain'		=> $data[$_] -> {'name'}
+							'domain'		=> $data[$_]->{'name'}
 						),
 			'update'		=> &create_command('Modify',
 							'domain_update'	=> 1,
-							'domain'		=> $data[$_] -> {'name'}
+							'domain'		=> $data[$_]->{'name'}
 						),
 			'transfert'		=> &create_command('Transfert',
 							'domain_transfert'=> 1,
-							'domain'		=> $data[$_] -> {'name'}
+							'domain'		=> $data[$_]->{'name'}
 						),
 			'delete'		=> &create_command('Delete',
 							'domain_delete'	=> 1,
-							'domain'		=> $data[$_] -> {'name'}
+							'domain'		=> $data[$_]->{'name'}
 						)
 		);
 
 		# Convert date from sec to europe format
-		if ($data[$_] -> {'expires'}) {
-			$data[$_] -> {'expires'} = &sec2date($data[$_] -> {'expires'});
+		if ($data[$_]->{'expires'}) {
+			$data[$_]->{'expires'} = &sec2date($data[$_]->{'expires'});
 		}
 		$list .= &small_parsing(
 			$raw,
 			'public_cgi'	=> $conf{'public_cgi'},
-			'domain'	=> &create_command($data[$_] -> {'name'}, 'class' => 'dom'),
+			'domain'	=> &create_command($data[$_]->{'name'}, 'class' => 'dom'),
 			'class'	=> $class,
-			'expires'	=> $data[$_] -> {'expires'},
+			'expires'	=> $data[$_]->{'expires'},
 			%comm
 		);
 		unless ($class) { $class = 'lineh'; }
@@ -1129,10 +1136,10 @@ sub send_request {
 # print "=$in{'domain'}=<br>";
 	# Check for dublicate in database
 # print " 'domain' => $in{'domain'} <br>";
-	@tmp = $collections -> find( { 'name' => $in{'domain'} } ) -> all;
-#print $tmp[0] -> {'_id'};
+	@tmp = $collections->find( { 'name' => $in{'domain'} } )->all;
+#print $tmp[0]->{'_id'};
 # print Dumper(\@tmp);
-	if (scalar(@tmp) && $tmp[0] -> {'_id'}) {
+	if (scalar(@tmp) && $tmp[0]->{'_id'}) {
 #print $in{'domain'};
 		# 
 		if (scalar(@tmp) == 1) {
@@ -1140,7 +1147,7 @@ sub send_request {
 print "\n<hr>\n";
 			# if domain exist in the base
 			&cmp_request($tmp[0]);
-#			$tmp = $collections -> update( { '_id' => $tmp[0] -> {'_id'} }, { %tmp } );
+#			$tmp = $collections->update( { '_id' => $tmp[0]->{'_id'} }, { %tmp } );
 		}
 		else {
 			# print request page for resolve conflict
@@ -1154,33 +1161,33 @@ print "\n<hr>\n";
 #print "<hr>";
 	}
 	else {
-#		@tmp = $collections -> insert( { %tmp } );
+#		@tmp = $collections->insert( { %tmp } );
 	}
 exit;
 #print "<hr>";
-#@tmp = $collections -> find( { 'domain' => $in{'domain'} } ) -> all;
-#print $tmp[0] -> {'_id'};
+#@tmp = $collections->find( { 'domain' => $in{'domain'} } )->all;
+#print $tmp[0]->{'_id'};
 #exit;
 #print "<hr>";
 #		print $tmp;
 #print "<hr>";
-#		$tmp = $collections -> insert( {%tmp} );
+#		$tmp = $collections->insert( {%tmp} );
 #		print Dumper($tmp);
 #print "<hr>";
-#		$tmp = $collections -> find( { 'domain' => $in{'domain'} } ) -> all;
+#		$tmp = $collections->find( { 'domain' => $in{'domain'} } )->all;
 #		print Dumper($tmp);
-#		$db = $client -> get_database( 'tutorial' ) -> drop();
-#		$db -> run_command($cmd);
+#		$db = $client->get_database( 'tutorial' )->drop();
+#		$db->run_command($cmd);
 
 	# store domain if sending success
 	if ($in{'store'} eq 'on') {
-#		my $client = MongoDB::MongoClient -> new(host => $conf{'database'});
-#		my @dbs = $client -> database_names;
+#		my $client = MongoDB::MongoClient->new(host => $conf{'database'});
+#		my @dbs = $client->database_names;
 #print "<hr>";
 #my %tmp = map { $_ => 1 } @dbs;
 #print "<hr>";
 	
-#		my $db = $client -> get_database( 'domains' );
+#		my $db = $client->get_database( 'domains' );
 #		my $collections = $db->get_collection( 'domains' );
 
 		# Prepare data for storing
@@ -1264,7 +1271,7 @@ sub query_contact {
 	# check domain in the base
 	if ($in{'contact'}) {
 		# Check exists domains
-		@tmp = $collections -> find( { 'id' => $in{'contact'} } ) -> all;
+		@tmp = $collections->find( { 'id' => $in{'contact'} } )->all;
 
 		if (scalar(@tmp) > 1) {
 			$in{'messages'} = "Есть небольшая проблема - контактов <b>$in{'contact'}</b> в базе несколько штук.";
@@ -1310,7 +1317,7 @@ sub query_domain {
 	# check domain in the base
 	if ($in{'domain'}) {
 		# Check exists domains
-		@tmp = $collections -> find( { 'name' => $in{'domain'} } ) -> all;
+		@tmp = $collections->find( { 'name' => $in{'domain'} } )->all;
 
 		if (scalar(@tmp) > 1) {
 			$in{'messages'} = "Есть небольшая проблема - доменов <b>$in{'domain'}</b> в базе несколько штук.";
@@ -1757,9 +1764,9 @@ sub connect {
 	unless ($col) { $col = $collection{'domains'}; }
 
 	# Read list of domains
-#	$client = MongoDB::MongoClient -> new(host => $conf{'db_link'});
-	$client = MongoDB::Connection -> new(host => $conf{'db_link'});
-	$db = $client -> get_database( $base );
+#	$client = MongoDB::MongoClient->new(host => $conf{'db_link'});
+	$client = MongoDB::Connection->new(host => $conf{'db_link'});
+	$db = $client->get_database( $base );
 	$collections = $db->get_collection( $col);
 
 	return $collections;
@@ -1988,7 +1995,7 @@ sub put_mail_auth {
 	);
 
 	use Email::Simple::Creator; # or other Email::
-	$message = Email::Simple -> create(
+	$message = Email::Simple->create(
 		header => [
 			From		=> $hach{'from'},
 			To		=> "$hach{'to'};$hach{'cc'}",
