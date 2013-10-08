@@ -122,13 +122,13 @@ sub domain_update {
 		$domain_sceleton->{'rem'}->{'contacts'}->{'admin'} = $info->{'contacts'}->{'admin'};
 	}
 	
-print Dumper($domain_sceleton);
+# print Dumper($domain_sceleton);
 #exit;
 	# Send create domain request
 	$epp = &connect_epp();
 
 	# Update domain by EPP
-	$info = $epp->update($domain_sceleton);
+	$epp->update_domain($domain_sceleton);
 # print Dumper($info->{'response'});
 
 	# check response errors
@@ -136,26 +136,25 @@ print Dumper($domain_sceleton);
 
 	# Store new domain
 	if (($Net::EPP::Simple::Code == 1000)||($Net::EPP::Simple::Code == 1000)) {
-print Dumper($domain_sceleton);
+# print Dumper($domain_sceleton);
 		$domain_sceleton->{'date'} = time();
 		$domain_sceleton->{'domain'} = time();
 		$domain_sceleton->{'command'} = 'domain_update';
-		$collections->insert( $domain_sceleton );
+
+		# Find and Update domain status to 'updating' in the base
+		@tmp = $collections->find( { 'name' => $in{'name'} } )->all;
+		if (scalar(@tmp) == 1) {
+			$collections->update( { '_id' => $tmp[0]->{'_id'}}, { '$set' => { 'type' => 'updating' } } );
+		}
+		else {
+			$out{'messages'} .= "В базе  несколько записей о домене $in{'name'}";
+		}
 	}
-print $Net::EPP::Simple::Code;
-print $Net::EPP::Simple::Message;
+# print $Net::EPP::Simple::Code;
+# print $Net::EPP::Simple::Message;
 
 	# Send create domain request
 	$html = Dumper($domain_sceleton);
-
-	# Find and Update domain status to 'updating' in the base
-	@tmp = $collections->find( { 'name' => $in{'name'} } )->all;
-	if (scalar(@tmp) == 1) {
-		$collections->update( { '_id' => $tmp[0]->{'_id'}}, { '$set' => { 'type' => 'updating' } } );
-	}
-	else {
-		$out{'messages'} .= "В базе  несколько записей о домене $in{'name'}";
-	}
 
 	# Load mail frame template
 	$html = &load_tempfile('file' => $tmpl{'frame'});
@@ -1021,16 +1020,16 @@ sub cmp_request {
 	$data = shift; # source
 	$target = shift; # target
 
-print Dumper($data);
+# print Dumper($data);
 
-print "<hr>";
+# print "<hr>";
 
-print Dumper($target);
-print "<hr>";
+# print Dumper($target);
+# print "<hr>";
 
-	if ((ref($data) eq 'HASH') && (ref($target) eq 'HASH')) {
-		print Dumper(&cmp_hash($data, $target));
-	}
+	# if ((ref($data) eq 'HASH') && (ref($target) eq 'HASH')) {
+		# print Dumper(&cmp_hash($data, $target));
+	# }
 
 	# clear domain sceleton
 	$domain_sceleton = '';
