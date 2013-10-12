@@ -31,9 +31,9 @@ sub load_tempfile {
 	my ($templ, %hach);
 	%hach = @_;
 
-	open ('TMPL', "<$hach{'file'}") || &prnerr("$mesg{'not_read_file'} $hach{'file'}:$!");
+	open ('TMPL', "<$hach{'file'}") || die;
 		while(<TMPL>){ $templ .= $_; }
-	close(TMPL) || &prnerr("$mesg{'not_read_file'} $hach{'file'}: $!");
+	close(TMPL) || die;
 
 	return $templ;
 }

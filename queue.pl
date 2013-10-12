@@ -1,91 +1,79 @@
 #!/usr/bin/perl -w
 
+#######
+# This tool sycn data between Epp & local database 'domains'
+# It changing type of document to 'use' if database & Epp info are equal.
+# It must be regular run (once per day or more often)
+#######
+
 use strict;
 use warnings;
 use MongoDB;
 use Encode qw(encode decode);
 use Net::EPP::Simple;
+use Time::Local;
 
 use Data::Dumper;
 
 print "Content-type: text/html; charset = utf-8\nPragma: no-cache\n\n";
 
 our (%conf, %collection, %months, %week, %in, %tmpl, %mesg, %domain_mail, %command_epp, %commands, %menu_line);
+our ($domain_info);
 
+use Subs;
 require "drs.pm";
 
-my ($log, $info, $epp, @data);
+my ($log, $collection, $request, $key, $tmp, $epp, @data, );
 
-$log = &connect($conf{'database'}, $collection{'queue'});
+$collection = &connect($conf{'database'}, $collection{'domains'});
+$log = &connect($conf{'database'}, $collection{'queue_log'});
 
-@data = $log -> find( {} ) -> all;
+# Get list of domain cantained type as 'updating'
+@data = $collection -> find( {'$or' => [ {'type' => 'updating'}, {'type' => 'creating'} ] }) -> all;
 
-foreach (0..(scalar(@data) - 1)) {
-print "<li>$data[$_]->{'name'}</li>";
-	
-	# Connect to Epp server
-	$epp = &connect_epp();
+# Connect to Epp server
+$epp = &connect_epp();
 
-	# check domain
-	$info = $epp->domain_info($data[$_]->{'name'});
-	
-	&check_response($info, 2001);
+foreach $key (@data) {
+	# Get domain fields from Epp
+	$request = $epp->domain_info($key->{'name'});
 
-	if ($Net::EPP::Simple::Code == 1000) {
-		# Convert response to UTF8
-		$info = &obj2utf($info);
-
-		$in{'messages'} = "Домен зарегистрирован. Последнее обновление ".$info->{upDate}." till ".$info->{exDate}." by ".$info->{clID};
+	# compare database & Epp documents
+	$tmp = &cmp_obj($key, $request);
+	unless (scalar(keys %{$tmp})) {
+		# Change type to 'use' if database & Epp info are equal
+		$collection->update( { '_id' => $key->{'_id'}}, { '$set' => { 'type' => 'use' } } );
+		print $key->{'name'};
+		&error_log($log, 'queue', "Success $key->{'type'} domain $key->{'name'}. Change '$key->{'type'}' to 'use'");
+		last;
 	}
-	elsif ($Net::EPP::Simple::Code == 2001 || $Net::EPP::Simple::Code == 2202) {
-		$in{'messages'} .= "Ошибка EPP: <li>$Net::EPP::Simple::Code</li><li>$Net::EPP::Simple::Message</li><li>$Net::EPP::Simple::Error</li>";
-	}
-
-	if ($data[$_]->{'command'} =~ /^domain_create$/) {
-print Dumper($info);
-print "\n\n";
-print Dumper($data[$_]);
-	}
-	elsif ($data[$_]->{'command'} =~ /^domain_update$/) {
-	}
-exit;
-	# $log->update(
-		# { '_id' => $data[$_]->{'_id'} },
-		# { '$set' => { 'message_id' => $data[$_]->{'msgQ'}->{'id'} } },
-	# );
-	#{}, {$set => {"message_id" => x.name.additional}, $unset => {"id" =>1}}
+	$request = $tmp = '';
 }
 
 exit;
 
 ############## Subs ##############
 
-sub check_response {
-	my ($obj, @erors);
-	$obj = shift;
-	@erors = @_;
+sub cmp_obj {
+	my ($data, $target, $tmp, @tmp, %tmp);
+	$data = shift; # source
+	$target = shift; # target
 
-	# Find errors in the EPP response
-	unless ($obj) {
-		foreach (@erors) {
-			if ($Net::EPP::Simple::Code == $_) {
-				$in{'messages'} .= $mesg{'epp_connection_error'}.' : Code '.$Net::EPP::Simple::Code."<br>";
-				$in{'messages'} .= $Net::EPP::Simple::Message."<br>".$Net::EPP::Simple::Error;
-				last;
-			}
+	# Set fields skiped for check
+	map { $tmp{$_} = 1 } ( '_id', 'authInfo', 'clID', 'crDate', 'crID', 'roid', 'upDate', 'upID', 'date', 'expires', 'type' );
+
+	$tmp = &cmp_hash($data, $target);
+
+	foreach (keys %{$tmp}) {
+		# skip non checked fields
+		if (exists $tmp{$_}) {
+			delete ($$tmp{$_});
 		}
 	}
-	else {
-		foreach (@erors) {
-			if ($obj->{'response'}->{'result'}->{'code'}) {
-				if ($obj->{'response'}->{'result'}->{'code'} == $_) {
-					$in{'messages'} .= $mesg{'epp_request_error'}.' : Code '.$obj->{'response'}->{'result'}->{'code'}."<br>";
-					$in{'messages'} .= $obj->{'response'}->{'result'}->{'msg'}."<br>".$obj->{'response'}->{'trID'}->{'svTRID'};
-					last;
-				}
-			}
-		}
-	}
+	%tmp = ();
+	@tmp = ();
+
+	return $tmp;
 }
 
 sub connect {
@@ -144,62 +132,3 @@ sub error_log {
 	$data = $srting = '';
 	return;
 }
-
-sub obj2utf {
-	my ($obj, $key);
-	$obj = shift;
-
-	foreach $key (keys %{$obj}) {
-		if (ref($obj->{$key}) eq 'HASH') {
-			$obj->{$key} = &hash2utf($obj->{$key});
-		}
-		elsif (ref($obj->{$key}) eq 'ARRAY') {
-			$obj->{$key} = &array2utf($obj->{$key});
-		}
-		else {
-			$obj->{$key} = encode('UTF8', $obj->{$key});
-		}
-	}
-
-	return $obj;
-}
-
-sub hash2utf {
-	my ($hach, $key);
-	$hach = shift;
-
-	foreach $key (keys %{$hach}) {
-		if (ref($hach->{$key}) eq 'HASH') {
-			$hach->{$key} = &hash2utf($hach->{$key});
-		}
-		elsif (ref($hach->{$key}) eq 'ARRAY') {
-			$hach->{$key} = &array2utf($hach->{$key});
-		}
-		else {
-			$hach->{$key} = encode('UTF8', $hach->{$key});
-		}
-	}
-
-	return $hach;
-}
-
-sub array2utf {
-	my ($arr, @tmp);
-	$arr = shift;
-
-	@tmp = @{$arr};
-	foreach (@tmp) {
-		if (ref($_) eq 'HASH') {
-			$_ = &hash2utf($_);
-		}
-		elsif (ref($_) eq 'ARRAY') {
-			$_ = &array2utf($_);
-		}
-		else {
-			$_ = encode('UTF8', $_);
-		}
-	}
-
-	return \@tmp;
-}
-

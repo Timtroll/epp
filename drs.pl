@@ -5,7 +5,7 @@ use warnings;
 use CGI qw/param/;
 use MIME::Base64;
 use IO::Socket;
-use Encode qw(encode decode);
+# use Encode qw(encode decode);
 #use Net::Whois::Raw qw( whois );
 use MongoDB;
 use MongoDB::OID;
@@ -24,7 +24,9 @@ BEGIN {
 
 our (%conf, %collection, %months, %week, %in, %tmpl, %mesg, %domain_mail, %command_epp, %commands, %menu_line);
 our (@week, @sceleton);
-our ($domain_sceleton);
+our ($domain_sceleton, $domain_info);
+
+use Subs;
 require "drs.pm";
 
  # for developers
@@ -58,7 +60,7 @@ elsif ($in{'domain_renew'})	{ &domain_renew(&connect($conf{'database'}, $collect
 else					{ &main('title' => 'Стартовая'); }
 
 sub domain_update {
-	my ($html, $info, $mess, $collections, $epp, @tmp,  %tmp, %out);
+	my ($html, $info, $mess, $collections, $epp, $update, @tmp, @temp,  %tmp, %out);
 	$collections = shift;
 
 	# Prepare params data for sending
@@ -74,16 +76,18 @@ sub domain_update {
 				},
 			},
 			'chg'		=> {
-				'registrant'	=> $in{'registrant'},
 				'authInfo'	=> &create_rnd(11)
 			}
 	};
+	unless (($in{'name'} =~ /^[\w\d]+\.ua$/)||($in{'name'} =~ /^.*\.in\.ua$/)||($in{'name'} =~ /^.*\.crimea\.ua$/)||($in{'name'} =~ /^.*\.od\.ua$/)) {
+		$domain_sceleton->{'chg'}->{'registrant'} = $in{'registrant'};
+	}
 
 	# skip setting billing contact for *.kiev.ua
-	# unless (($in{'name'} =~ /^.*\.kiev\.ua$/)||($in{'name'} =~ /^.*\.com\.ua$/)) {
-# print "sdf\n\n";
-		# $domain_sceleton->{'add'}->{'contacts'}->{'billing'} = $in{'contacts_billing'};
-	# }
+	unless (($in{'name'} =~ /^.*\.kiev\.ua$/)||($in{'name'} =~ /^.*\.com\.ua$/)) {
+print "sdf\n\n";
+		$domain_sceleton->{'add'}->{'contacts'}->{'billing'} = $in{'contacts_billing'};
+	}
 
 	# 'add' segment 'ns'
 	@tmp = ();
@@ -121,9 +125,16 @@ sub domain_update {
 	if (($in{'contacts_admin'} ne $info->{'contacts'}->{'admin'})&&($in{'contacts_admin'})) {
 		$domain_sceleton->{'rem'}->{'contacts'}->{'admin'} = $info->{'contacts'}->{'admin'};
 	}
+
+	# Prepare obect to update database
+	$update = {
+		%{$domain_sceleton->{'chg'}},
+		%{$domain_sceleton->{'add'}},
+		'type' => 'updating'
+	};
 	
 # print Dumper($domain_sceleton);
-#exit;
+# exit;
 	# Send create domain request
 	$epp = &connect_epp();
 
@@ -136,15 +147,12 @@ sub domain_update {
 
 	# Store new domain
 	if (($Net::EPP::Simple::Code == 1000)||($Net::EPP::Simple::Code == 1000)) {
-# print Dumper($domain_sceleton);
-		$domain_sceleton->{'date'} = time();
-		$domain_sceleton->{'domain'} = time();
-		$domain_sceleton->{'command'} = 'domain_update';
-
+# print Dumper($update);
+# exit;
 		# Find and Update domain status to 'updating' in the base
-		@tmp = $collections->find( { 'name' => $in{'name'} } )->all;
-		if (scalar(@tmp) == 1) {
-			$collections->update( { '_id' => $tmp[0]->{'_id'}}, { '$set' => { 'type' => 'updating' } } );
+		@temp = $collections->find( { 'name' => $in{'name'} } )->all;
+		if (scalar(@temp) == 1) {
+			$collections->update( { '_id' => $temp[0]->{'_id'}}, { '$set' => { %{$update} } } );
 		}
 		else {
 			$out{'messages'} .= "В базе  несколько записей о домене $in{'name'}";
@@ -701,7 +709,7 @@ sub print_array {
 }
 
 sub message_read {
-	my ($html, $out, $collections, $epp, $frame, $resp, $xml, $xml2json, $obj, $connect, @tmp, %mess);
+	my ($html, $out, $count, $collections, @tmp);
 	$collections = shift;
 
 	# Find & read message
@@ -713,15 +721,15 @@ sub message_read {
 
 		if ($tmp[0]->{'status'} eq 'new') {
 			$in{'messages'} .= $mesg{'message_read_success'};
+
+			# Change status of this message if ack to dequeue
+			$collections->update( { '_id' => $tmp[0]->{'_id'} }, { '$set' => { 'status' => 'old' } } );
 		}
 
-		# Change status of this message if ack to dequeue
-		$collections->update( { '_id' => $tmp[0]->{'_id'} }, { '$set' => { 'status' => 'old' } } );
-
-		# remove flag-file for mail css
-		@tmp = ();
-		@tmp = $collections->find( { 'status' =>'new' } )->all;
-		unless (scalar(@tmp)) {
+		# remove flag-file for display mail informer
+		$count = 0;
+		$count = $collections->find( { 'status' =>'new' } )->count;
+		unless ($count) {
 			unlink ("$conf{'home'}/poll");
 		}
 	}
@@ -871,19 +879,17 @@ sub list_messages {
 	$count = 1;
 	foreach (0..(scalar(@data) - 1)) {
 		@tmp = (
-			$data[$_]->{'msgQ'}->{'msg'},
+			$data[$_]->{'resData'}->{'domain:panData'}->{'domain:name'}->{'content'} ? $data[$_]->{'resData'}->{'domain:panData'}->{'domain:name'}->{'content'} : $data[$_]->{'resData'}->{'drs:notify'}->{'drs:object'},
 			'',
 			'mess',
 			'mess'
 		);
+		unless ($tmp[0]) { $tmp[0] = $data[$_]->{'resData'}->{'domain:trnData'}->{'domain:name'}; }
 		if ($data[$_]->{'resData'}->{'drs:notify'}->{'drs:message'}) {
 			$tmp[1] = $data[$_]->{'resData'}->{'drs:notify'}->{'drs:message'};
 		}
 		else {
-			$tmp[1] = $data[$_]->{'result'}->{'msg'};
-		}
-		if (length($tmp[0]) > 25) {
-			$tmp[0] = substr($tmp[0], 0, 25).'...';
+			$tmp[1] = $data[$_]->{'msgQ'}->{'msg'};
 		}
 		if (length($tmp[1]) > 72) {
 			$tmp[1] = substr($tmp[1], 0, 72).'...';
@@ -897,12 +903,12 @@ sub list_messages {
 			$raw,
 			'public_cgi'	=> $conf{'public_cgi'},
 			'id'		=> $data[$_]->{'msgQ'}->{'id'},
-			'text'		=> $tmp[1],
+			'text'		=> "<li class='$tmp[3]' id='tit_$count'><a href='#modalopen' onClick=\"javascript:open_frame('$conf{'public_cgi'}?message_read=1&id=".$data[$_]->{'msgQ'}->{'id'}."'); MarkRead('$count');\" class='$tmp[3]' id='title_$count'>$tmp[1]</a></li>",
 			'status'	=> $data[$_]->{'status'},
 			'text_class'	=> $tmp[2],
 			'class'	=> $class,
 			'count'	=> $count,
-			'date'		=> &sec2date(&date2sec($data[$_]->{'msgQ'}->{'qDate'}), '.'),
+			'date'		=> &sec2date(&date2sec($data[$_]->{'msgQ'}->{'qDate'}), '/'),
 			'title'		=> "<li class='$tmp[3]' id='tit_$count'><a href='#modalopen' onClick=\"javascript:open_frame('$conf{'public_cgi'}?message_read=1&id=".$data[$_]->{'msgQ'}->{'id'}."'); MarkRead('$count');\" class='$tmp[3]' id='title_$count'>$tmp[0]</a></li>"
 		);
 		@tmp = ();
@@ -964,7 +970,7 @@ sub list_domains {
 
 	foreach (0..(scalar(@data) - 1)) {
 		%comm = (
-			'info'			=> "<li><a href='#modalopen' onClick=\"javascript:open_frame('$conf{'public_cgi'}?domain_info=1&domain=".$data[$_]->{'name'}."');\" class='text'>info</a></li>",
+			'info'			=> "<li><a href='#modalopen' onClick=\"javascript:open_frame('$conf{'public_cgi'}?domain_info=1&domain=".$data[$_]->{'name'}."');\" class='text $data[$_]->{'type'}'>info</a></li>",
 			'suspend'		=> &create_command('Suspend',
 							'domain_suspend'=> 1,
 							'domain'		=> $data[$_]->{'name'}
@@ -994,7 +1000,7 @@ sub list_domains {
 		$list .= &small_parsing(
 			$raw,
 			'public_cgi'	=> $conf{'public_cgi'},
-			'domain'	=> &create_command($data[$_]->{'name'}, 'class' => 'dom'),
+			'domain'	=> &create_command($data[$_]->{'name'}, 'class' => "dom $data[$_]->{'type'}"),
 			'class'	=> $class,
 			'expires'	=> $data[$_]->{'expires'},
 			%comm
@@ -1013,98 +1019,6 @@ sub list_domains {
 		'content'	=> $html,
 		'path'		=> $path
 	);
-}
-
-sub cmp_request {
-	my ($data, $key, $cnt, $tmp, $target, @tmp, %tmp);
-	$data = shift; # source
-	$target = shift; # target
-
-# print Dumper($data);
-
-# print "<hr>";
-
-# print Dumper($target);
-# print "<hr>";
-
-	# if ((ref($data) eq 'HASH') && (ref($target) eq 'HASH')) {
-		# print Dumper(&cmp_hash($data, $target));
-	# }
-
-	# clear domain sceleton
-	$domain_sceleton = '';
-	$domain_sceleton = {};
-	
-#comment
-	if (ref($data) eq 'HASH') {
-		foreach $key (keys %{$data}) {
-			if ($key =~ /^_id$/) { next; }
-			elsif (ref($data->{$key}) eq 'HASH') {
-				%tmp =();
-				foreach (keys %{$data->{$key}}) {
-					unless ($target) {
-						$tmp = param($key."_$_");
-					}
-					else {
-						$tmp = $target->{$key}->{$_};
-					}
-					unless ($data->{$key}->{$_} eq $tmp) {
-						$tmp{$_} = $tmp;
-					}
-					$tmp = '';
-				}
-				if (scalar(keys %tmp)) {
-					$domain_sceleton->{$key} = { %tmp };
-				}
-			}
-			elsif (ref($data->{$key}) eq 'ARRAY') {
-				$cnt = 0;
-				@tmp =();
-				unless ($target) {
-					$cnt = param($key.'_count');
-				}
-				else {
-					$cnt = scalar(@{$data->{$key}});
-				}
-				foreach (0..($cnt-1)) {
-					unless ($target) {
-						$tmp = param($key."_$_");
-					}
-					else {
-						$tmp = $target->{$key}[$_];
-					}
-					unless ($tmp eq $data->{$key}[$_]) {
-						push @tmp, $tmp;
-					}
-					$tmp = '';
-				}
-				if (scalar(@tmp)) {
-					$domain_sceleton->{$key} = [ @tmp ];
-				}
-			}
-			else {
-				unless ($target) {
-					$tmp = param($key);
-				}
-				else {
-					$tmp = $target->{$key};
-				}
-				unless ($data->{$key} eq $tmp) {
-					$domain_sceleton->{$key} = $tmp;
-				}
-			}
-		}
-	}
-#cut
-
-# print "\n<hr>\n";
-# print Dumper($domain_sceleton);
-	if (scalar(keys %{$domain_sceleton})) {
-		return 0;
-	}
-	else {
-		return 1;
-	}
 }
 
 sub send_request {
@@ -1549,275 +1463,6 @@ sub chck_domain {
 	return $info, $mess;
 }
 
-############ Subs ############
-
-sub cmp_array {
-	my ($data, $target, $tmp, $cnt, @diff);
-	$data = shift;
-	$target = shift;
-
-	if (scalar(@{$data}) > scalar(@{$data})) {
-		$cnt =  @{$data};
-	}
-	else {
-		$cnt =  @{$target};
-	}
-	for (0..$cnt) {
-		if ((ref($$data[$_]) eq 'HASH') && (ref($$data[$_]) eq 'HASH')) {
-			$tmp = &cmp_hash($$data[$_], $$target[$_]);
-			if (ref($tmp) eq 'HASH') {
-				push @diff, $tmp;
-			}	
-		}
-		elsif ((ref($$target[$_]) eq 'ARRAY') && (ref($$target[$_]) eq 'ARRAY')) {
-			$tmp = &cmp_array($$data[$_], $$target[$_]);
-			if (ref($tmp) eq 'ARRAY') {
-				push @diff, $tmp;
-			}
-		}
-		else {
-			if ($$data[$_] && $$target[$_]) {
-				if (($$data[$_] =~ /\D/) && ($$target[$_] =~ /\D/)) {
-					unless ($$data[$_] eq $$target[$_]) {
-						push @diff, $$target[$_];
-					}
-				}
-				else {
-					unless ($$data[$_] == $$target[$_]) {
-						push @diff, $$target[$_];
-					}
-				}
-			}
-		}
-	}
-
-	if (scalar(@diff)) {
-		return \@diff;
-	}
-	else {
-		return;
-	}
-}
-
-sub cmp_hash {
-	my ($data, $target, $key, $tmp, %tmp);
-	$data = shift;
-	$target = shift;
-
-	foreach $key (keys %{$data}) {
-		if (exists($$target{$key})) {
-			if ((ref($$data{$key}) eq 'HASH') && (ref($$target{$key}) eq 'HASH')) {
-				$tmp = &cmp_hash($$data{$key}, $$target{$key});
-				if (ref($tmp) eq 'HASH') {
-					$tmp{$key} = $tmp;
-				}
-			}
-			elsif ((ref($$data{$key}) eq 'ARRAY') && (ref($$target{$key}) eq 'ARRAY')) {
-				$tmp = &cmp_array($$data{$key}, $$target{$key});
-				if (ref($tmp) eq 'ARRAY') {
-					$tmp{$key} = $tmp;
-				}
-			}
-			else {
-				if (($$data{$key} =~ /\D/) && ($$target{$key} =~ /\D/)) {
-					unless ($$data{$key} eq $$target{$key}) {
-						$tmp{$key} = $$target{$key};
-					}
-				}
-				else {
-					unless ($$data{$key} == $$target{$key}) {
-						$tmp{$key} = $$target{$key};
-					}
-				}
-			}
-		}
-		else {
-			$tmp{$key} = $$target{$key};
-		}
-	}
-	if (scalar(keys %tmp)) {
-		return \%tmp;
-	}
-	else {
-		return;
-	}
-}
-
-sub obj2utf {
-	my ($obj, $key);
-	$obj = shift;
-
-	foreach $key (keys %{$obj}) {
-		if (ref($obj->{$key}) eq 'HASH') {
-			$obj->{$key} = &hash2utf($obj->{$key});
-		}
-		elsif (ref($obj->{$key}) eq 'ARRAY') {
-			$obj->{$key} = &array2utf($obj->{$key});
-		}
-		else {
-			$obj->{$key} = encode('UTF8', $obj->{$key});
-		}
-	}
-
-	return $obj;
-}
-
-sub hash2utf {
-	my ($hach, $key);
-	$hach = shift;
-
-	foreach $key (keys %{$hach}) {
-		if (ref($hach->{$key}) eq 'HASH') {
-			$hach->{$key} = &hash2utf($hach->{$key});
-		}
-		elsif (ref($hach->{$key}) eq 'ARRAY') {
-			$hach->{$key} = &array2utf($hach->{$key});
-		}
-		else {
-			$hach->{$key} = encode('UTF8', $hach->{$key});
-		}
-	}
-
-	return $hach;
-}
-
-sub array2utf {
-	my ($arr, @tmp);
-	$arr = shift;
-
-	@tmp = @{$arr};
-	foreach (@tmp) {
-		if (ref($_) eq 'HASH') {
-			$_ = &hash2utf($_);
-		}
-		elsif (ref($_) eq 'ARRAY') {
-			$_ = &array2utf($_);
-		}
-		else {
-			$_ = encode('UTF8', $_);
-		}
-	}
-
-	return \@tmp;
-}
-
-sub check_response {
-	my ($obj, @erors);
-	$obj = shift;
-	@erors = @_;
-
-	# Find errors in the EPP response
-	unless ($obj) {
-		foreach (@erors) {
-			if ($Net::EPP::Simple::Code == $_) {
-				$in{'messages'} .= $mesg{'epp_connection_error'}.' : Code '.$Net::EPP::Simple::Code."<br>";
-				$in{'messages'} .= $Net::EPP::Simple::Message."<br>".$Net::EPP::Simple::Error;
-				last;
-			}
-		}
-	}
-	else {
-		foreach (@erors) {
-			if ($obj->{'response'}->{'result'}->{'code'}) {
-				if ($obj->{'response'}->{'result'}->{'code'} == $_) {
-					$in{'messages'} .= $mesg{'epp_request_error'}.' : Code '.$obj->{'response'}->{'result'}->{'code'}."<br>";
-					$in{'messages'} .= $obj->{'response'}->{'result'}->{'msg'}."<br>".$obj->{'response'}->{'trID'}->{'svTRID'};
-					last;
-				}
-			}
-		}
-	}
-}
-
-sub connect_epp {
-	my ($epp);
-
-	# Connect to Epp server
-	$epp = Net::EPP::Simple->new(
-		host		=> $conf{'epp_host'},
-		user		=> $conf{'epp_user'},
-		timeout	=> $conf{'epp_timeout'},
-		pass		=> $conf{'epp_pass'},
-		debug	=> $conf{'debug_epp'}
-	);
-
-	if (($Net::EPP::Simple::Code == 2500)||($Net::EPP::Simple::Code == 2501)||($Net::EPP::Simple::Code == 2502)) {
-		&main(
-			'title'		=> $mesg{'epp_connection_error'},
-			'path'		=> '/ '.$mesg{'epp_connection_error'}.' : Code '.$Net::EPP::Simple::Code,
-			'messages'	=> $Net::EPP::Simple::Message."<br>".$Net::EPP::Simple::Error,
-			'content'	=> "<a href='$conf{'public_cgi'}' color='blue'>$mesg{'goto_start'}</a>",
-		);
-	}
-
-	return $epp;
-}
-
-sub connect {
-	my ($col, $client, $db, $base, $collections);
-	$base = shift;
-	$col = shift;
-
-	# Set collection name if not exists
-	unless ($base) { $base = $conf{'database'}; }
-	unless ($col) { $col = $collection{'domains'}; }
-
-	# Read list of domains
-#	$client = MongoDB::MongoClient->new(host => $conf{'db_link'});
-	$client = MongoDB::Connection->new(host => $conf{'db_link'});
-	$db = $client->get_database( $base );
-	$collections = $db->get_collection( $col);
-
-	return $collections;
-}
-
-
-sub date2sec {
-	my ($date, $sec);
-	$date = shift;
-
-	$date =~ /(\d{4}?)\-(\d{2}?)\-(\d{2}?).(\d{2}?)\:(\d{2}?)\:(\d{2}?)/;
-	$sec = timelocal($6, $5, $4, $3, ($2-1), $1);
-
-	return $sec;
-}
-
-sub sec2date {
-	my ($sec, $sep, $date, @tmp);
-	$sec = shift;
-	$sep = shift;
-
-	unless ($sep) { $sep = '/'; }
-	@tmp = localtime($sec);
-	if ($tmp[0] < 10) { $tmp[0] ='0'.$tmp[0]; }
-	if ($tmp[1] < 10) { $tmp[1] ='0'.$tmp[1]; }
-	if ($tmp[2] < 10) { $tmp[2] ='0'.$tmp[2]; }
-	if ($tmp[3] < 10) { $tmp[3] ='0'.$tmp[3]; }
-	$tmp[4] = ($tmp[4]+1);
-	if ($tmp[4] < 10) { $tmp[4] ='0'.$tmp[4]; }
-
-	# 1101 (month+day)
-	if ($sep eq 'md') {
-		$date = $tmp[4].$tmp[3];
-	}
-	# 2011-12-06T08:53:24.0948Z
-	elsif ($sep eq 'iso') {
-		$date = ($tmp[5]+1900)."-$tmp[4]-$tmp[3]T$tmp[2]:$tmp[1]:$tmp[0].1111Z";
-	}
-	# 2001-12-01 (yy-mm-dd where '-' is separeator)
-	elsif ($sep eq 'date') {
-		$date = ($tmp[5]+1900)."-".$tmp[4]."-".$tmp[3];
-#		$date = ($tmp[5]+1900)."-".$tmp[3]."-".$tmp[4];
-	}
-	# 01-02-2001 (dd-mm-yy where '-' is separeator)
-	else {
-		$date = $tmp[3].$sep.$tmp[4].$sep.($tmp[5]+1900);
-	}
-	@tmp = ();
-
-	return $date;
-}
-
 sub create_command_list {
 	my ($comm, $out, $tmp, @tmp);
 
@@ -1879,6 +1524,55 @@ sub create_command {
 
 	return $comm;
 }
+
+sub load_tempfile {
+	my ($templ, %hach);
+	%hach = @_;
+
+	open ('TMPL', "<$hach{'file'}") || &prnerr("$mesg{'not_read_file'} $hach{'file'}:$!");
+		while(<TMPL>){ $templ .= $_; }
+	close(TMPL) || &prnerr("$mesg{'not_read_file'} $hach{'file'}: $!");
+
+	return $templ;
+}
+
+sub put_mail_auth {
+	my ($message, $error, $transport, %hach);
+	%hach = @_;
+
+	use Email::Sender::Simple qw(sendmail);
+	use Email::Sender::Transport::SMTP::TLS;
+	use Try::Tiny;
+
+	$transport = Email::Sender::Transport::SMTP::TLS->new(
+		host		=> $hach{'mail_server'},
+		port		=> $hach{'port'},
+		username	=> $hach{'login'},
+		password	=> $hach{'pass'},
+		helo		=> 'robot.spam.net.ua',
+	);
+
+	use Email::Simple::Creator; # or other Email::
+	$message = Email::Simple->create(
+		header => [
+			From		=> $hach{'from'},
+			To		=> "$hach{'to'};$hach{'cc'}",
+			Subject	=> $hach{'subj'}
+		],
+		body => $hach{'text'}
+	);
+
+	try {
+		sendmail($message, { transport => $transport });
+	}
+	catch {
+		$error = "Error sending email: $_";
+	};
+
+	return $error;
+}
+
+######## Subs ########
 
 sub read_param {
 	my ($domain, $key, $cnt);
@@ -1956,74 +1650,185 @@ print "$key= ";
 	}
 }
 
-sub small_parsing {
-	my ($tmpl, $setup, %hach);
-	$tmpl = shift;
-	%hach = @_;
+sub cmp_request {
+	my ($data, $key, $cnt, $tmp, $target, @tmp, %tmp);
+	$data = shift; # source
+	$target = shift; # target
 
-	$tmpl =~ s/\<\%(\w+)?\%\>/$hach{$1}?$hach{$1}:''/gex;
+# print Dumper($data);
 
-	return $tmpl;
-}
+# print "<hr>";
 
-sub load_tempfile {
-	my ($templ, %hach);
-	%hach = @_;
+# print Dumper($target);
+# print "<hr>";
 
-	open ('TMPL', "<$hach{'file'}") || &prnerr("$mesg{'not_read_file'} $hach{'file'}:$!");
-		while(<TMPL>){ $templ .= $_; }
-	close(TMPL) || &prnerr("$mesg{'not_read_file'} $hach{'file'}: $!");
+	# if ((ref($data) eq 'HASH') && (ref($target) eq 'HASH')) {
+		# print Dumper(&cmp_hash($data, $target));
+	# }
 
-	return $templ;
-}
-
-sub put_mail_auth {
-	my ($message, $error, $transport, %hach);
-	%hach = @_;
-
-	use Email::Sender::Simple qw(sendmail);
-	use Email::Sender::Transport::SMTP::TLS;
-	use Try::Tiny;
-
-	$transport = Email::Sender::Transport::SMTP::TLS->new(
-		host		=> $hach{'mail_server'},
-		port		=> $hach{'port'},
-		username	=> $hach{'login'},
-		password	=> $hach{'pass'},
-		helo		=> 'robot.spam.net.ua',
-	);
-
-	use Email::Simple::Creator; # or other Email::
-	$message = Email::Simple->create(
-		header => [
-			From		=> $hach{'from'},
-			To		=> "$hach{'to'};$hach{'cc'}",
-			Subject	=> $hach{'subj'}
-		],
-		body => $hach{'text'}
-	);
-
-	try {
-		sendmail($message, { transport => $transport });
+	# clear domain sceleton
+	$domain_sceleton = '';
+	$domain_sceleton = {};
+	
+#comment
+	if (ref($data) eq 'HASH') {
+		foreach $key (keys %{$data}) {
+			if ($key =~ /^_id$/) { next; }
+			elsif (ref($data->{$key}) eq 'HASH') {
+				%tmp =();
+				foreach (keys %{$data->{$key}}) {
+					unless ($target) {
+						$tmp = param($key."_$_");
+					}
+					else {
+						$tmp = $target->{$key}->{$_};
+					}
+					unless ($data->{$key}->{$_} eq $tmp) {
+						$tmp{$_} = $tmp;
+					}
+					$tmp = '';
+				}
+				if (scalar(keys %tmp)) {
+					$domain_sceleton->{$key} = { %tmp };
+				}
+			}
+			elsif (ref($data->{$key}) eq 'ARRAY') {
+				$cnt = 0;
+				@tmp =();
+				unless ($target) {
+					$cnt = param($key.'_count');
+				}
+				else {
+					$cnt = scalar(@{$data->{$key}});
+				}
+				foreach (0..($cnt-1)) {
+					unless ($target) {
+						$tmp = param($key."_$_");
+					}
+					else {
+						$tmp = $target->{$key}[$_];
+					}
+					unless ($tmp eq $data->{$key}[$_]) {
+						push @tmp, $tmp;
+					}
+					$tmp = '';
+				}
+				if (scalar(@tmp)) {
+					$domain_sceleton->{$key} = [ @tmp ];
+				}
+			}
+			else {
+				unless ($target) {
+					$tmp = param($key);
+				}
+				else {
+					$tmp = $target->{$key};
+				}
+				unless ($data->{$key} eq $tmp) {
+					$domain_sceleton->{$key} = $tmp;
+				}
+			}
+		}
 	}
-	catch {
-		$error = "Error sending email: $_";
+#cut
+
+# print "\n<hr>\n";
+# print Dumper($domain_sceleton);
+	if (scalar(keys %{$domain_sceleton})) {
+		return 0;
+	}
+	else {
+		return 1;
+	}
+}
+
+sub check_response {
+	my ($obj, @erors);
+	$obj = shift;
+	@erors = @_;
+
+	# Find errors in the EPP response
+	unless ($obj) {
+		foreach (@erors) {
+			if ($Net::EPP::Simple::Code == $_) {
+				$in{'messages'} .= $mesg{'epp_connection_error'}.' : Code '.$Net::EPP::Simple::Code."<br>";
+				$in{'messages'} .= $Net::EPP::Simple::Message."<br>".$Net::EPP::Simple::Error;
+				last;
+			}
+		}
+	}
+	else {
+		foreach (@erors) {
+			if ($obj->{'response'}->{'result'}->{'code'}) {
+				if ($obj->{'response'}->{'result'}->{'code'} == $_) {
+					$in{'messages'} .= $mesg{'epp_request_error'}.' : Code '.$obj->{'response'}->{'result'}->{'code'}."<br>";
+					$in{'messages'} .= $obj->{'response'}->{'result'}->{'msg'}."<br>".$obj->{'response'}->{'trID'}->{'svTRID'};
+					last;
+				}
+			}
+		}
+	}
+}
+
+sub connect_epp {
+	my ($epp);
+
+	# Connect to Epp server
+	$epp = Net::EPP::Simple->new(
+		host		=> $conf{'epp_host'},
+		user		=> $conf{'epp_user'},
+		timeout	=> $conf{'epp_timeout'},
+		pass		=> $conf{'epp_pass'},
+		debug	=> $conf{'debug_epp'}
+	);
+
+	if (($Net::EPP::Simple::Code == 2500)||($Net::EPP::Simple::Code == 2501)||($Net::EPP::Simple::Code == 2502)) {
+		&main(
+			'title'		=> $mesg{'epp_connection_error'},
+			'path'		=> '/ '.$mesg{'epp_connection_error'}.' : Code '.$Net::EPP::Simple::Code,
+			'messages'	=> $Net::EPP::Simple::Message."<br>".$Net::EPP::Simple::Error,
+			'content'	=> "<a href='$conf{'public_cgi'}' color='blue'>$mesg{'goto_start'}</a>",
+		);
+	}
+
+	return $epp;
+}
+
+sub connect {
+	my ($col, $client, $db, $base, $collections);
+	$base = shift;
+	$col = shift;
+
+	# Set collection name if not exists
+	unless ($base) { $base = $conf{'database'}; }
+	unless ($col) { $col = $collection{'domains'}; }
+
+	# Read list of domains
+#	$client = MongoDB::MongoClient->new(host => $conf{'db_link'});
+	$client = MongoDB::Connection->new(host => $conf{'db_link'});
+	$db = $client->get_database( $base );
+	$collections = $db->get_collection( $col);
+
+	return $collections;
+}
+
+sub error_log {
+	my ($collection, $log, $type, $data, $srting);
+	$collection = shift;
+	$type = shift;
+	$data = shift;
+
+	unless ($data) {
+		return;
+	}
+
+	$srting = {
+		'time'	=> time(),
+		'type'		=> $type ? $type : '',
+		'data'		=> $data ? $data : ''
 	};
+	$collection->insert( $srting );
 
-	return $error;
-}
-
-sub create_rnd {
-	my ($amount, $out, @chars);
-	$amount = shift;
-
-	$amount--;
-	@chars = split('', 'Aa0Bb1Cc2Dd3Ee4Ff5Gg6Hh7Ii8Jj9KkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz');
-	$out = join("", @chars[ map{ rand @chars } (0 .. $amount) ]);
-
-	return $out;
-}
-
-sub prnerr {
-	print @_; exit;
+	$data = $srting = '';
+	return;
 }

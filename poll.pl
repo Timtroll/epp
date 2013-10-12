@@ -1,5 +1,11 @@
 #!/usr/bin/perl -w
 
+#######
+# This tool get Poll messages from Epp to local database 'messages_list'
+# For all Ack messages sets 'new' status.
+# It must be regular run (once per day or more often)
+#######
+
 use strict;
 use warnings;
 use Net::EPP::Simple;
@@ -12,89 +18,31 @@ use Time::Local;
 
 our (%conf, %collection, %months, %week, %in, %tmpl, %mesg, %domain_mail, %command_epp, %commands, %menu_line);
 
+use Subs; # qw/sec2date/;
 require "drs.pm";
 
-my ($collections, $epp, $resp, $xml, $xml2json, $obj, $count, $frame, $log, $transfer, @tmp);
-
-		# # # Find transfer message in Tranfer base
-		# # @tmp = $collections -> find( {}, { 'msg_date' => 1 } ) -> all;
-		# # print scalar(@tmp);
-		# # print "\n";
-		# # foreach (0..(scalar(@tmp)-1)) {
-			# # if (exists $tmp[$_]->{'msg_date'}) {
-				# # print $tmp[$_]->{'_id'};
-		# # print "\n";
-				# # $collections->remove({"_id" => $tmp[$_]->{'_id'}});
-		# # #		last;
-			# # }
-		# # }
-		# # exit;
-# @tmp = $collections -> find( {}, { 'domain:name' => 1 } ) -> all;
-# #print Dumper(\@tmp);
-# foreach (0..(scalar(@tmp)-1)) {
-	# if ($tmp[$_]->{'resData'}->{'domain:trnData'}->{'domain:name'}) {
-		# $obj = '';
-		# $obj = {
-			# 'id'		=> $tmp[$_]->{'msgQ'}->{'id'},
-			# 'msg'		=> $tmp[$_]->{'msgQ'}->{'msg'},
-			# 'msg_date'	=> $tmp[$_]->{'msgQ'}->{'qDate'},
-# #			'msg_date'	=> &sec2date(&date2sec($tmp[$_]->{'msgQ'}->{'qDate'}), '.'),
-			# 'name'	=> $tmp[$_]->{'resData'}->{'domain:trnData'}->{'domain:name'},
-			# 'epp'		=> '',
-			# 'time'	=> &sec2date(time(), '.'),
-			# 'status'	=> ((time() -&date2sec($tmp[$_]->{'msgQ'}->{'qDate'})) < 432000) ? 'new' : 'old'
-		# };
-
-		# $count = 0;
-		# $count =  $transfer -> find( { 'name' => $tmp[$_]->{'resData'}->{'domain:trnData'}->{'domain:name'} } ) -> count;
-# # print "$_ = ";
-# # print " = ";
-# # print $tmp[$_]->{'resData'}->{'domain:trnData'}->{'domain:name'};
-# # print "\n";
-# # print Dumper(@temp);
-# # print "\n";
-		# unless ($count) {
-			# print Dumper($obj);
-			# # Insert message into message base if not exists
-			# $transfer->insert( $obj );
-		# }
-	# }
-# }
-
-
-# exit;
+my ($collections, $epp, $obj, $ack, $count, $log, $transfer, @tmp);
+$log = &connect($conf{'database'}, $collection{'log_poll'});
 
 # Connect to Epp server
 $epp = &connect_epp();
 
-# Send Request to get Poll
-$frame = Net::EPP::Frame::Command::Poll::Req->new;
-$resp = $epp->request($frame);
+# Req Poll messages
+$obj = &get_req($epp, $log);
 
-# Store new message if have not errors & message not exists in a base
-# Get & store new message
-$xml = $resp->toString(1);
-
-# Convert XML response to object
-$xml2json = XML::Simple->new();
-$obj = $xml2json->XMLin($xml, KeyAttr => '');
-
-# Add new fields to message object
-$obj->{'response'}->{'status'} = 'new';
-$in{'id'} = $obj->{'response'}->{'message_id'} = $obj->{'response'}->{'msgQ'}->{'id'};
-
-if ($obj->{'response'}->{'message_id'}) {
+# Check exists message
+if ($obj->{'message_id'}) {
 	$collections = &connect($conf{'database'}, $collection{'messages'});
 	$transfer = &connect($conf{'database'}, $collection{'transfer'});
-	$log = &connect($conf{'database'}, $collection{'log_poll'});
 
 	# Calculate exist same message in the databse
-	$count = $collections -> find( { 'message_id' => $obj->{'response'}->{'message_id'} } ) -> count;
+	$count = $collections -> find( { 'message_id' => $obj->{'message_id'} } ) -> count;
 
 	# Set flag for message reader if message not exists in base and flag not exists too
 	unless ($count) {
 		# Insert message into message base if not exists
-#		$collections->insert( $obj->{'response'} );
+		$collections->insert( $obj );
+		&error_log($log, 'epp', "Add new message id: $obj->{'message_id'} in 'messages_list' database");
 
 		unless (-e "$conf{'home'}/poll") {
 			# set flag-file for mail icon
@@ -105,20 +53,26 @@ if ($obj->{'response'}->{'message_id'}) {
 		}
 	}
 
-	# Find transfer message in Tranfer base
+	# Ack this message
+	$ack = &get_ack($epp, $log, $id);
+print "$count\n";
+print Dumper($obj);
+exit;
+
+
+	# Find transfer message in 'message_list' base
 	$count = 0;
 	$count = $collections -> find( { 'resData' => { 'domain:trnData' => {'domain:name' => 1 } } } ) -> count;
 
 	# Set flag for message reader if message not exists in base and flag not exists too
 	unless ($count) {
 		# check 'pendingTransfer' status for domain
-		pendingTransfer
 
 		# Insert trasnfer request into transfer base if not exists
-		$collections->insert( {
-			'transfer_id' => $obj->{'response'}->{'message_id'},
-			'name' =>
-		} );
+		# $collections->insert( {
+			# 'transfer_id' => $obj->{'message_id'},
+			# 'name' =>
+		# } );
 
 		if ($obj->{'msgQ'}->{'msg'}) {
 			# Find transfer message in Tranfer base
@@ -135,82 +89,71 @@ print Dumper($obj);
 					'name'	=> $tmp[$_]->{'resData'}->{'domain:trnData'}->{'domain:name'},
 					'epp'		=> '',
 					'time'	=> &sec2date(time(), '.'),
-					'status'	=> ((time() -&date2sec($tmp[$_]->{'msgQ'}->{'qDate'})) < $conf{'panding_period'}) ? 'new' : 'old'
+					'status'	=> ((time() - &date2sec($tmp[$_]->{'msgQ'}->{'qDate'})) < $conf{'panding_period'}) ? 'new' : 'old'
 				} );
 			}
 		}
 	}
 
-	# Ack this message
-	$frame = Net::EPP::Frame::Command::Poll::Ack->new;
-	$frame->setMsgID($obj->{'response'}->{'message_id'});
-	$resp = $epp->request($frame);
-
-	# Convert XML response to object
-	$xml = $resp->toString(1);
-	$xml2json = XML::Simple->new();
-	$obj = $xml2json->XMLin($xml, KeyAttr => '');
-
-	if ($obj->{'response'}->{'result'}->{'code'} == 1000) {
-		&error_log($log, 'epp', "Command completed successfully. Ack dequeue. Message id: $in{'id'}");
-	}
-	else {
-		&error_log($log, 'epp', "Connection error when Ack Poll: $obj->{'response'}->{'result'}->{'code'}");
-	}
-}
-else {
-	$log = &connect($conf{'database'}, $collection{'log_poll'});
-	&error_log($log, 'epp', "We have not message in Poll");
 }
 
 exit;
 
 ############## Subs ##############
 
-sub date2sec {
-	my ($date, $sec);
-	$date = shift;
+sub get_ack {
+	my ($epp, $log, $id, $frame, $resp, $obj, $xml, $xml2json);
+	$epp = shift;
+	$log = shift;
+	$id = shift;
 
-	$date =~ /(\d{4}?)\-(\d{2}?)\-(\d{2}?).(\d{2}?)\:(\d{2}?)\:(\d{2}?)/;
-	$sec = timelocal($6, $5, $4, $3, ($2-1), $1);
+	# Ack this message
+	# $frame = Net::EPP::Frame::Command::Poll::Ack->new;
+	# $frame->setMsgID($id);
+	# $resp = $epp->request($frame);
 
-	return $sec;
+	# # Convert XML response to object
+	# $xml = $resp->toString(1);
+	# $xml2json = XML::Simple->new();
+	# $obj = $xml2json->XMLin($xml, KeyAttr => '');
+
+	if ($obj->{'result'}->{'code'} == 1000) {
+		&error_log($log, 'epp', "Command completed successfully. Ack dequeue. Message id: $id");
+	}
+	else {
+		&error_log($log, 'epp', "Connection error when Ack Poll: $obj->{'result'}->{'code'}");
+	}
 }
 
-sub sec2date {
-	my ($sec, $sep, $date, @tmp);
-	$sec = shift;
-	$sep = shift;
+sub get_req {
+	my ($epp, $log, $frame, $resp, $xml, $obj, $xml2json);
+	$epp = shift;
+	$log = shift;
 
-	unless ($sep) { $sep = '/'; }
-	@tmp = localtime($sec);
-	if ($tmp[0] < 10) { $tmp[0] ='0'.$tmp[0]; }
-	if ($tmp[1] < 10) { $tmp[1] ='0'.$tmp[1]; }
-	if ($tmp[2] < 10) { $tmp[2] ='0'.$tmp[2]; }
-	if ($tmp[3] < 10) { $tmp[3] ='0'.$tmp[3]; }
-	$tmp[4] = ($tmp[4]+1);
-	if ($tmp[4] < 10) { $tmp[4] ='0'.$tmp[4]; }
+	# Send Request to get Poll
+	$frame = Net::EPP::Frame::Command::Poll::Req->new;
+	$resp = $epp->request($frame);
 
-	# 1101 (month+day)
-	if ($sep eq 'md') {
-		$date = $tmp[4].$tmp[3];
+	# Store new message if have not errors & message not exists in a base
+	# Get & store new message
+	$xml = $resp->toString(1);
+
+	# Convert XML response to object
+	$xml2json = XML::Simple->new();
+	$obj = $xml2json->XMLin($xml, KeyAttr => '');
+
+	# Add new fields to message object
+	$obj->{'response'}->{'status'} = 'new';
+	$obj->{'response'}->{'message_id'} = $obj->{'response'}->{'msgQ'}->{'id'};
+
+	if ($obj->{'result'}->{'code'} == 1000) {
+		&error_log($log, 'epp', "Command 'Req' completed successfully. Message id: $obj->{'message_id'}");
 	}
-	# 2011-12-06T08:53:24.0948Z
-	elsif ($sep eq 'iso') {
-		$date = ($tmp[5]+1900)."-$tmp[4]-$tmp[3]T$tmp[2]:$tmp[1]:$tmp[0].1111Z";
-	}
-	# 2001-12-01 (yy-mm-dd where '-' is separeator)
-	elsif ($sep eq 'date') {
-		$date = ($tmp[5]+1900)."-".$tmp[4]."-".$tmp[3];
-#		$date = ($tmp[5]+1900)."-".$tmp[3]."-".$tmp[4];
-	}
-	# 01-02-2001 (dd-mm-yy where '-' is separeator)
 	else {
-		$date = $tmp[3].$sep.$tmp[4].$sep.($tmp[5]+1900);
+		&error_log($log, 'epp', "Connection error when 'Req' Poll: $obj->{'result'}->{'code'}");
 	}
-	@tmp = ();
 
-	return $date;
+	return $obj->{'response'};
 }
 
 sub connect {
