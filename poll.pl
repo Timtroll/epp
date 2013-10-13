@@ -6,6 +6,8 @@
 # It must be regular run (once per day or more often)
 #######
 
+print "Content-type: text/html; charset = utf-8\nPragma: no-cache\n\n";
+
 use strict;
 use warnings;
 use Net::EPP::Simple;
@@ -21,7 +23,7 @@ our (%conf, %collection, %months, %week, %in, %tmpl, %mesg, %domain_mail, %comma
 use Subs; # qw/sec2date/;
 require "drs.pm";
 
-my ($collections, $epp, $obj, $ack, $count, $log, $transfer, @tmp);
+my ($messages, $domains, $epp, $obj, $ack, $count, $log, $transfer, @tmp, @temp);
 $log = &connect($conf{'database'}, $collection{'log_poll'});
 
 # Connect to Epp server
@@ -31,17 +33,18 @@ $epp = &connect_epp();
 $obj = &get_req($epp, $log);
 
 # Check exists message
-if ($obj->{'message_id'}) {
-	$collections = &connect($conf{'database'}, $collection{'messages'});
-	$transfer = &connect($conf{'database'}, $collection{'transfer'});
+#if ($obj->{'message_id'}) {
+	$messages = &connect($conf{'database'}, $collection{'messages'});
 
+	# $transfer = &connect($conf{'database'}, $collection{'transfer'});
+=comment
 	# Calculate exist same message in the databse
-	$count = $collections -> find( { 'message_id' => $obj->{'message_id'} } ) -> count;
+	$count = $messages -> find( { 'message_id' => $obj->{'message_id'} } ) -> count;
 
 	# Set flag for message reader if message not exists in base and flag not exists too
 	unless ($count) {
 		# Insert message into message base if not exists
-		$collections->insert( $obj );
+		$messages->insert( $obj );
 		&error_log($log, 'epp', "Add new message id: $obj->{'message_id'} in 'messages_list' database");
 
 		unless (-e "$conf{'home'}/poll") {
@@ -52,24 +55,61 @@ if ($obj->{'message_id'}) {
 			chmod 0666, "$conf{'home'}/poll";
 		}
 	}
-
+=cut
 	# Ack this message
-	$ack = &get_ack($epp, $log, $obj->{'message_id'});
-print "$count\n";
-print Dumper($obj);
-exit;
-
+	if ($obj->{'message_id'}) {
+		$ack = &get_ack($epp, $log, $obj->{'message_id'});
+	}
 
 	# Find transfer message in 'message_list' base
 	$count = 0;
-	$count = $collections -> find( { 'resData' => { 'domain:trnData' => {'domain:name' => 1 } } } ) -> count;
+	$count = $messages -> find( { 'msgQ.msg' => qr/Pending/i } ) -> count;
 
 	# Set flag for message reader if message not exists in base and flag not exists too
-	unless ($count) {
-		# check 'pendingTransfer' status for domain
+	if ($count) {
+		# set date on 5 days before now
+		my $cnt = (time() -  60*60*24*5);
 
+		# check 'pending' status for updating domains
+		@tmp = $messages -> find( { 'msgQ.msg' => qr/Pending/i, 'date' => { '$gte' => $cnt } } ) -> sort( { 'date' => -1 } ) -> all; # , { 'resData.drs:notify.drs:object' => 1 }
+# print Dumper($count);
+print scalar(@tmp);
+print "<br>";
+$count = 0;
+		foreach (@tmp) {
+			# Skip error action
+			unless ($_->{'msgQ'}->{'msg'} =~ /Pending action completed with error/ ) {
+				# Find domain name in Poll message
+				my $name = '';
+				if ($_->{'resData'}->{'domain:panData'}->{'domain:name'}->{'content'}) {
+					$name = $_->{'resData'}->{'domain:panData'}->{'domain:name'}->{'content'};
+				}
+				elsif ($_->{'resData'}->{'domain:trnData'}->{'domain:name'}) {
+					$name = $_->{'resData'}->{'domain:trnData'}->{'domain:name'};
+				}
+				if ($name) {
+					$domains = &connect($conf{'database'}, $collection{'domains'});
+			
+					# Change domain 'type' to 'updating' for checking data equals
+					@temp = $domains -> find( { 'name' => $name } ) -> all;
+					if (scalar(@temp)) {
+						$domains->update( { '_id' => $temp[0]->{'_id'}}, { '$set' => { 'type' => 'updating' } } );
+					print "$temp[0]->{'_id'} $count =  $cnt ", int((time() - $_->{'date'})/24/60/60), " $_->{'msgQ'}->{'qDate'} ";
+					print $_->{'resData'}->{'domain:panData'}->{'domain:name'}->{'content'} if $_->{'resData'}->{'domain:panData'}->{'domain:name'}->{'content'};
+			#		print " = ";
+					print $_->{'resData'}->{'domain:trnData'}->{'domain:name'}, ' = ' if $_->{'resData'}->{'domain:trnData'}->{'domain:name'};
+					print " $_->{'msgQ'}->{'msg'}";
+					print "<br>\n";
+					}
+				}
+				$count++;
+			}
+		}
+
+		# check 'pendingTransfer' status for my domains
+exit;
 		# Insert trasnfer request into transfer base if not exists
-		# $collections->insert( {
+		# $messages->insert( {
 			# 'transfer_id' => $obj->{'message_id'},
 			# 'name' =>
 		# } );
@@ -94,15 +134,14 @@ print Dumper($obj);
 			}
 		}
 	}
-
-}
+#}
 
 exit;
 
 ############## Subs ##############
 
 sub get_ack {
-	my ($epp, $log, $id, $frame, $resp, $obj, $xml, $xml2json);
+	my ($epp, $log, $id, $mess, $frame, $resp, $obj, $xml, $xml2json);
 	$epp = shift;
 	$log = shift;
 	$id = shift;
@@ -117,12 +156,9 @@ sub get_ack {
 	$xml2json = XML::Simple->new();
 	$obj = $xml2json->XMLin($xml, KeyAttr => '');
 
-	if ($obj->{'result'}->{'code'} == 1000) {
-		&error_log($log, 'epp', "Command completed successfully. Ack dequeue. Message id: $id");
-	}
-	else {
-		&error_log($log, 'epp', "Connection error when Ack Poll: $obj->{'result'}->{'code'}");
-	}
+	&log_poll($obj, 'Ack');
+
+	return $obj->{'response'};
 }
 
 sub get_req {
@@ -142,17 +178,32 @@ sub get_req {
 	$xml2json = XML::Simple->new();
 	$obj = $xml2json->XMLin($xml, KeyAttr => '');
 
-	# Add new fields to message object
+	# Add'new fields to message object
+	if ($obj->{'response'}->{'msgQ'}->{'qDate'}) {
+		$obj->{'response'}->{'date'} = &date2sec($obj->{'response'}->{'msgQ'}->{'qDate'});
+	}
+	else {
+		$obj->{'response'}->{'date'} = time();
+	}
 	$obj->{'response'}->{'status'} = 'new';
 	$obj->{'response'}->{'message_id'} = $obj->{'response'}->{'msgQ'}->{'id'};
 
-	$mess = "$obj->{'response'}->{'result'}->{'code'}: 'Req' $obj->{'response'}->{'result'}->{'msg'}.";
+	&log_poll($obj, 'Req');
+
+	return $obj->{'response'};
+}
+
+sub log_poll {
+	my ($obj, $mess);
+	$obj = shift;
+	$mess = shift;
+
+	$mess = "$obj->{'response'}->{'result'}->{'code'}: '$mess' $obj->{'response'}->{'result'}->{'msg'}.";
+print "$mess\n";
 	if ($obj->{'response'}->{'message_id'}) {
 		$mess .= " Message id: $obj->{'response'}->{'message_id'}";
 	}
 	&error_log($log, 'epp',  $mess);
-
-	return $obj->{'response'};
 }
 
 sub connect {

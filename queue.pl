@@ -23,7 +23,7 @@ our ($domain_info);
 use Subs;
 require "drs.pm";
 
-my ($log, $collection, $request, $key, $tmp, $epp, @data, );
+my ($log, $collection, $request, $key, $tmp, $epp, @data, @skip);
 
 $collection = &connect($conf{'database'}, $collection{'domains'});
 $log = &connect($conf{'database'}, $collection{'queue_log'});
@@ -39,7 +39,12 @@ foreach $key (@data) {
 	$request = $epp->domain_info($key->{'name'});
 
 	# compare database & Epp documents
-	$tmp = &cmp_obj($key, $request);
+	@skip = ( '_id', 'authInfo', 'clID', 'crDate', 'crID', 'roid', 'upDate', 'upID', 'date', 'expires', 'type' );
+	if (($key->{'name'} =~ /^[\w\d]+\.ua$/)||($key->{'name'} =~ /^.*\.in\.ua$/)||($key->{'name'} =~ /^.*\.crimea\.ua$/)||($key->{'name'} =~ /^.*\.od\.ua$/)) {
+		push @skip, 'registrant';
+	}
+	$tmp = &cmp_obj($key, $request, \@skip);
+
 	unless (scalar(keys %{$tmp})) {
 		# Change type to 'use' if database & Epp info are equal
 		$collection->update( { '_id' => $key->{'_id'}}, { '$set' => { 'type' => 'use' } } );
@@ -55,12 +60,13 @@ exit;
 ############## Subs ##############
 
 sub cmp_obj {
-	my ($data, $target, $tmp, @tmp, %tmp);
+	my ($data, $target, $tmp, $skip, @tmp, %tmp);
 	$data = shift; # source
 	$target = shift; # target
+	$skip = shift; # target
 
 	# Set fields skiped for check
-	map { $tmp{$_} = 1 } ( '_id', 'authInfo', 'clID', 'crDate', 'crID', 'roid', 'upDate', 'upID', 'date', 'expires', 'type' );
+	map { $tmp{$_} = 1 } ( @{$skip} );
 
 	$tmp = &cmp_hash($data, $target);
 
