@@ -54,7 +54,7 @@ if ($obj->{'message_id'}) {
 	}
 
 	# Ack this message
-	$ack = &get_ack($epp, $log, $id);
+	$ack = &get_ack($epp, $log, $obj->{'message_id'});
 print "$count\n";
 print Dumper($obj);
 exit;
@@ -108,14 +108,14 @@ sub get_ack {
 	$id = shift;
 
 	# Ack this message
-	# $frame = Net::EPP::Frame::Command::Poll::Ack->new;
-	# $frame->setMsgID($id);
-	# $resp = $epp->request($frame);
+	$frame = Net::EPP::Frame::Command::Poll::Ack->new;
+	$frame->setMsgID($id);
+	$resp = $epp->request($frame);
 
-	# # Convert XML response to object
-	# $xml = $resp->toString(1);
-	# $xml2json = XML::Simple->new();
-	# $obj = $xml2json->XMLin($xml, KeyAttr => '');
+	# Convert XML response to object
+	$xml = $resp->toString(1);
+	$xml2json = XML::Simple->new();
+	$obj = $xml2json->XMLin($xml, KeyAttr => '');
 
 	if ($obj->{'result'}->{'code'} == 1000) {
 		&error_log($log, 'epp', "Command completed successfully. Ack dequeue. Message id: $id");
@@ -126,7 +126,7 @@ sub get_ack {
 }
 
 sub get_req {
-	my ($epp, $log, $frame, $resp, $xml, $obj, $xml2json);
+	my ($epp, $log, $mess, $frame, $resp, $xml, $obj, $xml2json);
 	$epp = shift;
 	$log = shift;
 
@@ -146,12 +146,11 @@ sub get_req {
 	$obj->{'response'}->{'status'} = 'new';
 	$obj->{'response'}->{'message_id'} = $obj->{'response'}->{'msgQ'}->{'id'};
 
-	if ($obj->{'result'}->{'code'} == 1000) {
-		&error_log($log, 'epp', "Command 'Req' completed successfully. Message id: $obj->{'message_id'}");
+	$mess = "$obj->{'response'}->{'result'}->{'code'}: 'Req' $obj->{'response'}->{'result'}->{'msg'}.";
+	if ($obj->{'response'}->{'message_id'}) {
+		$mess .= " Message id: $obj->{'response'}->{'message_id'}";
 	}
-	else {
-		&error_log($log, 'epp', "Connection error when 'Req' Poll: $obj->{'result'}->{'code'}");
-	}
+	&error_log($log, 'epp',  $mess);
 
 	return $obj->{'response'};
 }

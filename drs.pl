@@ -106,9 +106,16 @@ print "sdf\n\n";
 	($info, $mess) = &chck_domain();
 
 	# Find difference of input and exists 'ns'
-	if (scalar(@tmp)) {
+	my ($diff, $tt) = &cmp_array($domain_sceleton->{'add'}->{'ns'}, $info->{'ns'});
+	if ($diff) {
 		$domain_sceleton->{'rem'}->{'ns'} = $info->{'ns'};
 	}
+	else {
+		delete $domain_sceleton->{'add'}->{'ns'};
+	}
+# print "$diff = ";
+# print Dumper($tt);
+# exit;
 
 	# Prepare 'rem' contacts
 	if (($in{'contacts_tech'} ne $info->{'contacts'}->{'tech'})&&($in{'contacts_tech'})) {
@@ -133,8 +140,9 @@ print "sdf\n\n";
 		'type' => 'updating'
 	};
 	
-# print Dumper($domain_sceleton);
-# exit;
+print Dumper($info);
+print Dumper($domain_sceleton);
+#exit;
 	# Send create domain request
 	$epp = &connect_epp();
 
@@ -716,13 +724,11 @@ sub message_read {
 	@tmp = $collections->find( { 'message_id' => $in{'id'} } )->all;
 
 	if (scalar(@tmp) == 1) {
-		# Create html for message
-		$out = &info_table($tmp[0]);
-
 		if ($tmp[0]->{'status'} eq 'new') {
 			$in{'messages'} .= $mesg{'message_read_success'};
 
 			# Change status of this message if ack to dequeue
+			$tmp[0]->{'status'} = 'old';
 			$collections->update( { '_id' => $tmp[0]->{'_id'} }, { '$set' => { 'status' => 'old' } } );
 		}
 
@@ -732,6 +738,9 @@ sub message_read {
 		unless ($count) {
 			unlink ("$conf{'home'}/poll");
 		}
+
+		# Create html for message
+		$out = &info_table($tmp[0]);
 	}
 	elsif (scalar(@tmp) > 1) {
 		# we have dublicate
@@ -903,7 +912,7 @@ sub list_messages {
 			$raw,
 			'public_cgi'	=> $conf{'public_cgi'},
 			'id'		=> $data[$_]->{'msgQ'}->{'id'},
-			'text'		=> "<li class='$tmp[3]' id='tit_$count'><a href='#modalopen' onClick=\"javascript:open_frame('$conf{'public_cgi'}?message_read=1&id=".$data[$_]->{'msgQ'}->{'id'}."'); MarkRead('$count');\" class='$tmp[3]' id='title_$count'>$tmp[1]</a></li>",
+			'text'		=> "<li class='$tmp[3]' id='text_$count'><a href='#modalopen' onClick=\"javascript:open_frame('$conf{'public_cgi'}?message_read=1&id=".$data[$_]->{'msgQ'}->{'id'}."'); MarkRead('$count');\" class='$tmp[3]' id='textl_$count'>$tmp[1]</a></li>",
 			'status'	=> $data[$_]->{'status'},
 			'text_class'	=> $tmp[2],
 			'class'	=> $class,
