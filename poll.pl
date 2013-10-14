@@ -33,11 +33,10 @@ $epp = &connect_epp();
 $obj = &get_req($epp, $log);
 
 # Check exists message
-#if ($obj->{'message_id'}) {
+if ($obj->{'message_id'}) {
 	$messages = &connect($conf{'database'}, $collection{'messages'});
 
 	# $transfer = &connect($conf{'database'}, $collection{'transfer'});
-=comment
 	# Calculate exist same message in the databse
 	$count = $messages -> find( { 'message_id' => $obj->{'message_id'} } ) -> count;
 
@@ -55,7 +54,7 @@ $obj = &get_req($epp, $log);
 			chmod 0666, "$conf{'home'}/poll";
 		}
 	}
-=cut
+
 	# Ack this message
 	if ($obj->{'message_id'}) {
 		$ack = &get_ack($epp, $log, $obj->{'message_id'});
@@ -134,7 +133,7 @@ print Dumper($obj);
 			}
 		}
 	}
-#}
+}
 
 exit;
 

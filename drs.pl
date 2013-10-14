@@ -788,17 +788,28 @@ sub domain_info {
 
 	$out = &info_table($info, 'edit');
 
-	$html = &load_tempfile('file' => $tmpl{'frame'});
 	$comm = &create_command_list('frame');
 
-	print &small_parsing(
-		$html,
-		'public_cgi'	=> $conf{'public_cgi'},
-		'public_css'	=> $conf{'public_css'},
-		'title'		=> '<div class="title">Information from Epp</div>',
-		'commands'=> $comm,
-		'info'		=> $out
-	);
+	if ($in{'frame'}) {
+		$html = &load_tempfile('file' => $tmpl{'frame'});
+		print &small_parsing(
+			$html,
+			'public_cgi'	=> $conf{'public_cgi'},
+			'public_css'	=> $conf{'public_css'},
+			'title'		=> '<div class="title">Information from Epp</div>',
+			'commands'=> $comm,
+			'info'		=> $out
+		);
+	}
+	else {
+		$html = &load_tempfile('file' => $tmpl{'query_domain'});
+
+		&main(
+			'content'	=> $out.$comm,
+			'path'		=> $mesg{'domain_info'}.$in{'domain'},
+			'javascript'	=> "<script src='$conf{'public_url'}/css/domain_info.js'></script>"
+		);
+	}
 
 	exit;
 }
@@ -979,7 +990,7 @@ sub list_domains {
 
 	foreach (0..(scalar(@data) - 1)) {
 		%comm = (
-			'info'			=> "<li><a href='#modalopen' onClick=\"javascript:open_frame('$conf{'public_cgi'}?domain_info=1&domain=".$data[$_]->{'name'}."');\" class='text $data[$_]->{'type'}'>info</a></li>",
+			'info'			=> "<li><a href='#modalopen' onClick=\"javascript:open_frame('$conf{'public_cgi'}?domain_info=1&frame=1&domain=".$data[$_]->{'name'}."');\" class='text $data[$_]->{'type'}'>info</a></li>",
 			'suspend'		=> &create_command('Suspend',
 							'domain_suspend'=> 1,
 							'domain'		=> $data[$_]->{'name'}
