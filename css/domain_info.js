@@ -23,21 +23,22 @@ function MarkRead (cnt) {
 	window.document.getElementById('message').className = 'hide';
 	window.document.getElementById('status_'+cnt).innerHTML = 'old';
 }
-function AddInput (nam) {
-	var count = nam + '_count';
-	cnt = document.getElementById(count).value;
-	namer = nam + '_new';
-	var place = document.getElementById(namer);
-	var elem = document.createElement("li");
-	var newinput = document.createElement("input");
-	newinput.id = nam + '_' + cnt;
-	newinput.name = nam + '_' + cnt;
-	newinput.type = 'text';
-	newinput.className = 'dump-edit';
-	elem.appendChild(newinput);
-	place.appendChild(elem);
+function AddInput(obj, nam) {
+	var cnt = document.getElementById(nam+'_count').value;
+	var new_input=document.createElement('li');
+	new_input.innerHTML='<span  onclick="DelInput(this.parentNode, \''+nam+'\')">x</span>';
+	new_input.innerHTML=new_input.innerHTML+'<input name="'+ nam +'_'+cnt+'" class="dump-edit">';
+	new_input.innerHTML=new_input.innerHTML+'<b onclick="AddInput(this.parentNode, \''+nam+'\')">+<b>';
+	if (obj.nextSibling) {
+		document.getElementById(nam).insertBefore(new_input,obj.nextSibling)
+	}
+	else {
+		document.getElementById(nam).appendChild(new_input);
+	}
 	document.getElementById('sceleton').value = document.getElementById('sceleton').value + ' ' + nam + '_' + cnt;
 	cnt = ++cnt;
-//alert(cnt);
-	document.getElementById(count).value = cnt;
+	document.getElementById(nam+'_count').value = cnt;
+}
+function DelInput(obj, nam) {
+	document.getElementById(nam).removeChild(obj)
 }

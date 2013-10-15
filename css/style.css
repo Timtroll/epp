@@ -324,14 +324,29 @@ span:hover {
     margin: 0;
 }
 
+.dynamic {
+	display: block;
+}
 .dump b {
 	float:right;
 	vertical-align:middle;
 	text-decoration:none;
-	cursor:hand;
+	cursor: pointer;
+	cursor: hand;
 	padding-top:4px;
 	color: green;
 	padding-right:8px;
+	width: 12px;
+}
+.dump span {
+	float:right;
+	vertical-align:middle;
+	text-decoration:none;
+	cursor: pointer;
+	cursor: hand;
+	padding-top:3px;
+	color: braun;
+	padding-left:8px;
 	width: 12px;
 }
 .dump i {

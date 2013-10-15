@@ -53,7 +53,7 @@ elsif ($in{'calendar'})		{ &calendar(&connect($conf{'database'}, $collection{'do
 elsif ($in{'price'})		{ &get_price(&connect($conf{'database'}, $collection{'zones'})); }
 elsif ($in{'get_price'})	{ &get_price(&connect($conf{'database'}, $collection{'zones'})); }
 elsif ($in{'message_read'})	{ &message_read(&connect($conf{'database'}, $collection{'messages'})); }
-elsif ($in{'domain_create'})	{ &domain_create(&connect($conf{'database'}, $collection{'queue'})); }
+elsif ($in{'domain_create'})	{ &domain_create(&connect($conf{'database'}, $collection{'domains'})); }
 elsif ($in{'domain_save'})	{ &domain_save(&connect($conf{'database'}, $collection{'domains'})); }
 elsif ($in{'domain_update'}){ &domain_update(&connect($conf{'database'}, $collection{'domains'})); }
 elsif ($in{'domain_renew'})	{ &domain_renew(&connect($conf{'database'}, $collection{'domains'})); }
@@ -79,12 +79,12 @@ sub domain_update {
 				'authInfo'	=> &create_rnd(11)
 			}
 	};
-	unless (($in{'name'} =~ /^[\w\d]+\.ua$/)||($in{'name'} =~ /^.*\.in\.ua$/)||($in{'name'} =~ /^.*\.crimea\.ua$/)||($in{'name'} =~ /^.*\.od\.ua$/)) {
+	unless (($in{'name'} =~ /^(\w|\-)+\.ua$/)||($in{'name'} =~ /^(\w|\-)+\.in\.ua$/)||($in{'name'} =~ /^(\w|\-)+\.crimea\.ua$/)||($in{'name'} =~ /^(\w|\-)+\.od\.ua$/)) {
 		$domain_sceleton->{'chg'}->{'registrant'} = $in{'registrant'};
 	}
 
 	# skip setting billing contact for *.kiev.ua
-	unless (($in{'name'} =~ /^.*\.kiev\.ua$/)||($in{'name'} =~ /^.*\.com\.ua$/)) {
+	unless (($in{'name'} =~ /^(\w|\-)+\.kiev\.ua$/)||($in{'name'} =~ /^(\w|\-)+\.com\.ua$/)) {
 print "sdf\n\n";
 		$domain_sceleton->{'add'}->{'contacts'}->{'billing'} = $in{'contacts_billing'};
 	}
@@ -123,10 +123,8 @@ print "sdf\n\n";
 	}
 	if ($info->{'contacts'}->{'billing'}) {
 		if (($in{'contacts_billing'} ne $info->{'contacts'}->{'billing'})&&($in{'contacts_billing'})) {
-#			unless (($in{'name'} =~ /^.*\.kiev\.ua$/)||($in{'name'} =~ /^.*\.com\.ua$/)) {
-				$domain_sceleton->{'rem'}->{'contacts'}->{'billing'} = $info->{'contacts'}->{'billing'};
-				$domain_sceleton->{'add'}->{'contacts'}->{'billing'} = $in{'contacts_billing'};
-#			}
+			$domain_sceleton->{'rem'}->{'contacts'}->{'billing'} = $info->{'contacts'}->{'billing'};
+			$domain_sceleton->{'add'}->{'contacts'}->{'billing'} = $in{'contacts_billing'};
 		}
 	}
 	if (($in{'contacts_admin'} ne $info->{'contacts'}->{'admin'})&&($in{'contacts_admin'})) {
@@ -311,27 +309,16 @@ sub domain_create {
 	}
 	$domain_sceleton->{'ns'} = \@ns;
 	$domain_sceleton->{'status'} = \@status;
-	if ($in{'domain'} =~ /[\w|\d-]*\.com\.ua$/) {
+	if ($in{'domain'} =~ /^(\w|\-)+\.com\.ua$/) {
 		delete ($domain_sceleton->{'contacts'}->{'billing'});
 	}
-	if ($in{'domain'} =~ /[\w|\d-]*\.ua$/) {
+	if ($in{'domain'} =~ /^(\w|\-)+\.ua$/) {
 		$domain_sceleton->{'license'} = $in{'license'};
 	}
-print Dumper($domain_sceleton);
-exit;
-
 
 	# Send create domain request
 	$epp = &connect_epp();
 
-	# Remove the unneeded fields
-	# Fields for *.com.ua domains
-#	if ($in{'domain'} =~ /.*\.com\.ua$/) {{
-#	if ($in{'domain'} =~ /.*\.com\.ua$/) {
-#		delete ($domain_sceleton->{'contacts'}->{'billing'});
-#		delete ($domain_sceleton->{'license'});
-#		delete ($domain_sceleton->{'authInfo'});
-#	}
 	# Create new domain
 	$info = $epp->create_domain($domain_sceleton);
 	
@@ -343,6 +330,7 @@ exit;
 		$domain_sceleton->{'date'} = time();
 		$domain_sceleton->{'domain'} = time();
 		$domain_sceleton->{'command'} = 'domain_create';
+		$domain_sceleton->{'type'} = 'creating';
 		$collections->insert( $domain_sceleton );
 
 		$in{'messages'} = "Запрос на добавление домена $in{'domain'} добавлен в очередь";
@@ -678,8 +666,9 @@ sub print_array {
 	$name = shift;
 	$flag = shift;
 
-	$out = "<li><i id='dump_span'>$name :</i></li><ul id='".$name."_new'>";
+	$out = "<li><i id='dump_span'>$name :</i></li><ul id='$name'>";
 	$cnt = 0;
+	$tmp = '>&nbsp;';
 	
 	foreach (sort {$a cmp $b} keys @{$info}) {
 		if (ref($_) eq 'HASH') {
@@ -691,13 +680,12 @@ sub print_array {
 		else {
 			$out .= "<li>";
 			if ($flag) {
-				if ($cnt == (scalar(@{$info}) -1)) {
-					$tmp = "<b onclick=\"javascript:AddInput('$name');\">+</b>";
-				}
-				else {
-					$tmp = ' ';
-				}
-				$out .= "<input type='text' class='dump-edit' name='".$name."_$cnt' value='".$info->[$_]."'>$tmp";
+				if ($cnt) { $tmp = " onclick=\"javascript:DelInput(this.parentNode, '".$name."');\">x"; }
+				$out .= "<span$tmp</span>";
+				$out .= "<input type='text' class='dump-edit' name='".$name."_$cnt' value='".$info->[$_]."'>";
+#				if ($cnt == (scalar(@{$info}) -1)) {
+					$out .= "<b onclick=\"javascript:AddInput(this.parentNode, '$name');\">+</b>";
+#				}
 				push @sceleton, $name."_$cnt";
 			}
 			else {
@@ -707,7 +695,7 @@ sub print_array {
 		}
 		$cnt++;
 	}
-		$out .= "</li><div id='".$name."__new'></div>";
+#		$out .= "<div id='".$name."__new'></div>";
 	if ($flag) {
 		if ($cnt) {
 			$out .= "<input type='hidden' name='".$name."_count' id='".$name."_count' value='$cnt'>";
@@ -1250,18 +1238,16 @@ sub query_domain {
 	# check domain in the base
 	if ($in{'domain'}) {
 		# Check exists domains
-		@tmp = $collections->find( { 'name' => $in{'domain'} } )->all;
+		$data = $collections->find( { 'name' => $in{'domain'} } )->count;
 
-		if (scalar(@tmp) > 1) {
+		if ($data > 1) {
 			$in{'messages'} = "Есть небольшая проблема - доменов <b>$in{'domain'}</b> в базе несколько штук.";
 		}
-		elsif (scalar(@tmp) == 1) {
+		elsif ($data == 1) {
 			$in{'messages'} = "Такой домен <b>$in{'domain'}</b> уже есть в базе.";
 			$data = $tmp[0];
 		}
-		else {
-			$data = '';
-		}
+		$data = '';
 	}
 	else {
 		&main(
@@ -1274,24 +1260,28 @@ sub query_domain {
 
 	# check response errors
 	&check_response($data, 2001);
-	
-	if ($mess == 2302) {
-		$in{'messages'} .= 'Такой домен зарегистрирован';
-	}
-	elsif ($mess == 2303) {
-		$in{'messages'} .= 'Домен свободен для регистрации';
-	}
+# print $mess;
+	# if ($mess == 2302) {
+		# $in{'messages'} .= 'Такой домен зарегистрирован';
+	# }
+	# elsif ($mess == 2303) {
+		# $in{'messages'} .= 'Домен свободен для регистрации';
+	# }
 
 	# Create ADD form for EPP request
 	unless ($data) {
 		# delete Billing field from sceleton if domain is *.com.ua
-		if ($in{'domain'} =~ /.*\.com\.ua$/) {
+		if ($in{'domain'} =~ /^(\w|\-)+\.com\.ua$/) {
 			delete ($command_epp{'create'}->{'contacts'}->{'billing'});
 			delete ($command_epp{'create'}->{'license'});
 		}
 		$command_epp{'create'}->{'name'} = $in{'domain'};
+		$command_epp{'create'}->{'contacts'}->{'tech'} = 'trol-cunic';
+		$command_epp{'create'}->{'contacts'}->{'admin'} = 'trol-cunic';
+		$command_epp{'create'}->{'registrant'} = 'trol-cunic';
 		$out = &info_table($command_epp{'create'}, 'edit');
 	}
+
 	# Create UPDATE form for EPP request
 	else {
 print Dumper($data);
