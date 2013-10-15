@@ -338,8 +338,9 @@ span:hover {
 	padding-right:8px;
 	width: 12px;
 }
-.dump span {
+.dump u {
 	float:right;
+	display: block;
 	vertical-align:middle;
 	text-decoration:none;
 	cursor: pointer;
@@ -348,12 +349,18 @@ span:hover {
 	color: braun;
 	padding-left:8px;
 	width: 12px;
+	height: 27px;
 }
 .dump i {
     padding-top: 5px;
     vertical-align: middle;
     font-style: italic;
     height: 27px;
+    cursor: text;
+}
+
+.dump span {
+    text-decoration: none;
     cursor: text;
 }
 
@@ -371,6 +378,8 @@ span:hover {
     padding-top: 2px;
     padding-bottom: 2px;
     padding-left: 30px;
+    text-decoration: none;
+    cursor: text;
 }
 
 .dump-cc {
@@ -383,10 +392,6 @@ span:hover {
 .dump li {
     height: 27px;
     list-style: none;
-}
-
-.dump ul {
-    //	margin: 1px;
 }
 
 .dump div {

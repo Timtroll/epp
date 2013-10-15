@@ -39,7 +39,7 @@ foreach $key (@data) {
 	$request = $epp->domain_info($key->{'name'});
 
 	# compare database & Epp documents
-	@skip = ( '_id', 'authInfo', 'clID', 'crDate', 'crID', 'roid', 'upDate', 'upID', 'date', 'expires', 'type' );
+	@skip = ( '_id', 'authInfo', 'clID', 'crDate', 'crID', 'roid', 'upDate', 'upID', 'date', 'period', 'expires', 'type' );
 	if (($key->{'name'} =~ /^[\w\d]+\.ua$/)||($key->{'name'} =~ /^.*\.in\.ua$/)||($key->{'name'} =~ /^.*\.crimea\.ua$/)||($key->{'name'} =~ /^.*\.od\.ua$/)) {
 		push @skip, 'registrant';
 	}

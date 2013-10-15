@@ -55,9 +55,9 @@ elsif ($in{'get_price'})	{ &get_price(&connect($conf{'database'}, $collection{'z
 elsif ($in{'message_read'})	{ &message_read(&connect($conf{'database'}, $collection{'messages'})); }
 elsif ($in{'domain_create'})	{ &domain_create(&connect($conf{'database'}, $collection{'domains'})); }
 elsif ($in{'domain_save'})	{ &domain_save(&connect($conf{'database'}, $collection{'domains'})); }
-elsif ($in{'domain_update'}){ &domain_update(&connect($conf{'database'}, $collection{'domains'})); }
+elsif ($in{'domain_update'})	{ &domain_update(&connect($conf{'database'}, $collection{'domains'})); }
 elsif ($in{'domain_renew'})	{ &domain_renew(&connect($conf{'database'}, $collection{'domains'})); }
-else					{ &main('title' => 'Стартовая'); }
+else				{ &main('title' => 'Стартовая'); }
 
 sub domain_update {
 	my ($html, $info, $mess, $collections, $epp, $update, @tmp, @temp,  %tmp, %out);
@@ -98,9 +98,6 @@ print "sdf\n\n";
 		if (scalar(@tmp)) { $domain_sceleton->{'add'}->{'ns'} = \@tmp; }
 	}
 #print Dumper(\@tmp);
-
-	# Prepare data for 'rem' segment of request
-	$in{'domain'} = $in{'name'};
 
 	# check domain & get donain info
 	($info, $mess) = &chck_domain();
@@ -173,7 +170,7 @@ print Dumper($domain_sceleton);
 	# Load mail frame template
 	$html = &load_tempfile('file' => $tmpl{'frame'});
 
-	$out{'title'} = "<div class='title'>UPDATE домена $in{'domain'}</div>";
+	$out{'title'} = "<div class='title'>UPDATE домена $in{'name'}</div>";
 	$out{'messages'} .= $Net::EPP::Simple::Error.' '.$Net::EPP::Simple::Code.' '.$Net::EPP::Simple::Message;
 	print &small_parsing(
 		$html,
@@ -195,7 +192,7 @@ sub domain_save {
 	$epp = &connect_epp();
 
 	# get information about new domain
-	$info = $epp->domain_info($in{'domain'});
+	$info = $epp->domain_info($in{'name'});
 
 	# check response errors
 	&check_response($info, 2001);
@@ -226,22 +223,21 @@ sub domain_renew {
 	$collections = shift;
 
 	# Find current domain in database
-	$in{'domain'} = $in{'name'};
-	@tmp = $collections->find( { 'name' => $in{'domain'} } )->all;
+	@tmp = $collections->find( { 'name' => $in{'name'} } )->all;
 
 	# Create error if domain more than one
 	if ((scalar(@tmp) > 1) || (scalar(@tmp) == 0)) {
-		$in{'messages'} = "В базе находится ".scalar(@tmp)." доменов ".$in{'domain'}.", требуется вмешательство.";
+		$in{'messages'} = "В базе находится ".scalar(@tmp)." доменов ".$in{'name'}.", требуется вмешательство.";
 		&main();
 	}
 
 	# Create renew object
 	$html = $tmp[0]->{'exDate'};
-	unless ($in{'domain'} =~ /.ua$/) {
+	unless ($in{'name'} =~ /.ua$/) {
 #		$html=~s/2013/2014/;
 	}
 	$renew = {
-		'name'		=> $in{'domain'},
+		'name'		=> $in{'name'},
 		'cur_exp_date'	=> $html,
 		'period'		=> 1
 	};
@@ -258,7 +254,6 @@ sub domain_renew {
 	# Store new domain
 	if ($Net::EPP::Simple::Code == 1000) {
 		$renew->{'date'} = time();
-		$renew->{'domain'} = time();
 		$renew->{'command'} = 'domain_renew';
 		$collections->insert( $renew );
 
@@ -273,7 +268,7 @@ sub domain_renew {
 	# Load mail frame template
 	$html = &load_tempfile('file' => $tmpl{'frame'});
 
-	$out{'title'} = "<div class='title'>RENEW домена $in{'domain'}</div>";
+	$out{'title'} = "<div class='title'>RENEW домена $in{'name'}</div>";
 	$out{'messages'} = $Net::EPP::Simple::Error;
 	print &small_parsing(
 		$html,
@@ -309,10 +304,10 @@ sub domain_create {
 	}
 	$domain_sceleton->{'ns'} = \@ns;
 	$domain_sceleton->{'status'} = \@status;
-	if ($in{'domain'} =~ /^(\w|\-)+\.com\.ua$/) {
+	if ($in{'name'} =~ /^(\w|\-)+\.com\.ua$/) {
 		delete ($domain_sceleton->{'contacts'}->{'billing'});
 	}
-	if ($in{'domain'} =~ /^(\w|\-)+\.ua$/) {
+	if ($in{'name'} =~ /^(\w|\-)+\.ua$/) {
 		$domain_sceleton->{'license'} = $in{'license'};
 	}
 
@@ -328,12 +323,11 @@ sub domain_create {
 	# Store new domain to request queue
 	if ($Net::EPP::Simple::Code == 1000) {
 		$domain_sceleton->{'date'} = time();
-		$domain_sceleton->{'domain'} = time();
-		$domain_sceleton->{'command'} = 'domain_create';
+		$domain_sceleton->{'expires'} = time();
 		$domain_sceleton->{'type'} = 'creating';
 		$collections->insert( $domain_sceleton );
 
-		$in{'messages'} = "Запрос на добавление домена $in{'domain'} добавлен в очередь";
+		$in{'messages'} = "Запрос на добавление домена $in{'name'} добавлен в очередь";
 	}
 	else {
 		$in{'messages'} = $Net::EPP::Simple::Code.$Net::EPP::Simple::Message;
@@ -617,7 +611,9 @@ sub info_table {
 		}
 		$out .= '</ul>';
 	}
-	$out .= "<input type='hidden' name='sceleton' id='sceleton' value='".join(' ', @sceleton)."'>";
+	if ($flag) {
+		$out .= "<input type='hidden' name='sceleton' id='sceleton' value='".join(' ', @sceleton)."'>";
+	}
 
 	return $out;
 }
@@ -681,11 +677,9 @@ sub print_array {
 			$out .= "<li>";
 			if ($flag) {
 				if ($cnt) { $tmp = " onclick=\"javascript:DelInput(this.parentNode, '".$name."');\">x"; }
-				$out .= "<span$tmp</span>";
+				$out .= "<u$tmp</u>";
 				$out .= "<input type='text' class='dump-edit' name='".$name."_$cnt' value='".$info->[$_]."'>";
-#				if ($cnt == (scalar(@{$info}) -1)) {
-					$out .= "<b onclick=\"javascript:AddInput(this.parentNode, '$name');\">+</b>";
-#				}
+				$out .= "<b onclick=\"javascript:AddInput(this.parentNode, '$name');\">+</b>";
 				push @sceleton, $name."_$cnt";
 			}
 			else {
@@ -764,7 +758,7 @@ sub domain_info {
 	delete $info->{'request'};
 	delete $info->{'response'};
 
-	@tmp = $collections->find( { 'name' => $in{'domain'} } )->all;
+	@tmp = $collections->find( { 'name' => $in{'name'} } )->all;
 
 	# delete system field
 	$cmpr = $tmp[0];
@@ -794,7 +788,7 @@ sub domain_info {
 
 		&main(
 			'content'	=> $out.$comm,
-			'path'		=> $mesg{'domain_info'}.$in{'domain'},
+			'path'		=> $mesg{'domain_info'}.$in{'name'},
 			'javascript'	=> "<script src='$conf{'public_url'}/css/domain_info.js'></script>"
 		);
 	}
@@ -819,26 +813,26 @@ sub list_contacts {
 
 	foreach (0..(scalar(@data) - 1)) {
 		%comm = (
-			'info'			=> "<li><a href='#modalopen' onClick=\"javascript:open_frame('$conf{'public_cgi'}?domain_info=1&domain=".$data[$_]->{'name'}."');\" class='text'>info</a></li>",
+			'info'			=> "<li><a href='#modalopen' onClick=\"javascript:open_frame('$conf{'public_cgi'}?domain_info=1&name=".$data[$_]->{'name'}."');\" class='text'>info</a></li>",
 			'suspend'		=> &create_command('Suspend',
 							'domain_suspend'=> 1,
-							'domain'		=> $data[$_]->{'name'}
+							'name'		=> $data[$_]->{'name'}
 						),
 			'renew'		=> &create_command('Renew',
 							'domain_renew'	=> 1,
-							'domain'		=> $data[$_]->{'name'}
+							'name'		=> $data[$_]->{'name'}
 						),
 			'update'		=> &create_command('Modify',
 							'domain_update'	=> 1,
-							'domain'		=> $data[$_]->{'name'}
+							'name'		=> $data[$_]->{'name'}
 						),
 			'transfert'		=> &create_command('Transfert',
 							'domain_transfert'=> 1,
-							'domain'		=> $data[$_]->{'name'}
+							'name'		=> $data[$_]->{'name'}
 						),
 			'delete'		=> &create_command('Delete',
 							'domain_delete'	=> 1,
-							'domain'		=> $data[$_]->{'name'}
+							'name'		=> $data[$_]->{'name'}
 						)
 		);
 
@@ -849,7 +843,7 @@ sub list_contacts {
 		$list .= &small_parsing(
 			$raw,
 			'public_cgi'	=> $conf{'public_cgi'},
-			'domain'	=> &create_command($data[$_]->{'name'}, 'class' => 'dom'),
+			'name'	=> &create_command($data[$_]->{'name'}, 'class' => 'dom'),
 			'class'	=> $class,
 			'expires'	=> $data[$_]->{'expires'},
 			%comm
@@ -978,26 +972,26 @@ sub list_domains {
 
 	foreach (0..(scalar(@data) - 1)) {
 		%comm = (
-			'info'			=> "<li><a href='#modalopen' onClick=\"javascript:open_frame('$conf{'public_cgi'}?domain_info=1&frame=1&domain=".$data[$_]->{'name'}."');\" class='text $data[$_]->{'type'}'>info</a></li>",
+			'info'			=> "<li><a href='#modalopen' onClick=\"javascript:open_frame('$conf{'public_cgi'}?domain_info=1&frame=1&name=".$data[$_]->{'name'}."');\" class='text $data[$_]->{'type'}'>info</a></li>",
 			'suspend'		=> &create_command('Suspend',
 							'domain_suspend'=> 1,
-							'domain'		=> $data[$_]->{'name'}
+							'name'		=> $data[$_]->{'name'}
 						),
 			'renew'		=> &create_command('Renew',
 							'domain_renew'	=> 1,
-							'domain'		=> $data[$_]->{'name'}
+							'name'		=> $data[$_]->{'name'}
 						),
 			'update'		=> &create_command('Modify',
 							'domain_update'	=> 1,
-							'domain'		=> $data[$_]->{'name'}
+							'name'		=> $data[$_]->{'name'}
 						),
 			'transfert'		=> &create_command('Transfert',
 							'domain_transfert'=> 1,
-							'domain'		=> $data[$_]->{'name'}
+							'name'		=> $data[$_]->{'name'}
 						),
 			'delete'		=> &create_command('Delete',
 							'domain_delete'	=> 1,
-							'domain'		=> $data[$_]->{'name'}
+							'name'		=> $data[$_]->{'name'}
 						)
 		);
 
@@ -1008,7 +1002,7 @@ sub list_domains {
 		$list .= &small_parsing(
 			$raw,
 			'public_cgi'	=> $conf{'public_cgi'},
-			'domain'	=> &create_command($data[$_]->{'name'}, 'class' => "dom $data[$_]->{'type'}"),
+			'name'	=> &create_command($data[$_]->{'name'}, 'class' => "dom $data[$_]->{'type'}"),
 			'class'	=> $class,
 			'expires'	=> $data[$_]->{'expires'},
 			%comm
@@ -1035,7 +1029,7 @@ sub send_request {
 
 	$text{'text'} = $in{'request_data'};
 	if ($in{'operation'} ne 'add_to_base') {
-		$text{'subj'} = uc($in{'operation'})." ".$in{'domain'};
+		$text{'subj'} = uc($in{'operation'})." ".$in{'name'};
 
 =comment
 		$error = &put_mail_auth(
@@ -1054,14 +1048,14 @@ sub send_request {
 	else {
 		$in{'store'} = 1;
 	}
-# print "=$in{'domain'}=<br>";
+# print "=$in{'name'}=<br>";
 	# Check for dublicate in database
-# print " 'domain' => $in{'domain'} <br>";
-	@tmp = $collections->find( { 'name' => $in{'domain'} } )->all;
+# print " 'name' => $in{'name'} <br>";
+	@tmp = $collections->find( { 'name' => $in{'name'} } )->all;
 #print $tmp[0]->{'_id'};
 # print Dumper(\@tmp);
 	if (scalar(@tmp) && $tmp[0]->{'_id'}) {
-#print $in{'domain'};
+#print $in{'name'};
 		# 
 		if (scalar(@tmp) == 1) {
 # print Dumper($tmp[0]);
@@ -1086,7 +1080,7 @@ print "\n<hr>\n";
 	}
 exit;
 #print "<hr>";
-#@tmp = $collections->find( { 'domain' => $in{'domain'} } )->all;
+#@tmp = $collections->find( { 'name' => $in{'name'} } )->all;
 #print $tmp[0]->{'_id'};
 #exit;
 #print "<hr>";
@@ -1095,7 +1089,7 @@ exit;
 #		$tmp = $collections->insert( {%tmp} );
 #		print Dumper($tmp);
 #print "<hr>";
-#		$tmp = $collections->find( { 'domain' => $in{'domain'} } )->all;
+#		$tmp = $collections->find( { 'name' => $in{'name'} } )->all;
 #		print Dumper($tmp);
 #		$db = $client->get_database( 'tutorial' )->drop();
 #		$db->run_command($cmd);
@@ -1176,7 +1170,7 @@ exit;
 		$in{'messages'} = "Отправлено письмо:<p><b>subj:</b> $text{'subj'}</p><p>$text{'text'}</p>",
 	}
 	else {
-		$in{'messages'} = "В базу добавлена запись:<p><b>subj:</b> $in{'domain'}</p><p>$text{'text'}</p>",
+		$in{'messages'} = "В базу добавлена запись:<p><b>subj:</b> $in{'name'}</p><p>$text{'text'}</p>",
 	}
 #	&list_domains();
 	&main(
@@ -1236,15 +1230,15 @@ sub query_domain {
 	$collections = shift;
 
 	# check domain in the base
-	if ($in{'domain'}) {
+	if ($in{'name'}) {
 		# Check exists domains
-		$data = $collections->find( { 'name' => $in{'domain'} } )->count;
+		$data = $collections->find( { 'name' => $in{'name'} } )->count;
 
 		if ($data > 1) {
-			$in{'messages'} = "Есть небольшая проблема - доменов <b>$in{'domain'}</b> в базе несколько штук.";
+			$in{'messages'} = "Есть небольшая проблема - доменов <b>$in{'name'}</b> в базе несколько штук.";
 		}
 		elsif ($data == 1) {
-			$in{'messages'} = "Такой домен <b>$in{'domain'}</b> уже есть в базе.";
+			$in{'messages'} = "Такой домен <b>$in{'name'}</b> уже есть в базе.";
 			$data = $tmp[0];
 		}
 		$data = '';
@@ -1271,11 +1265,11 @@ sub query_domain {
 	# Create ADD form for EPP request
 	unless ($data) {
 		# delete Billing field from sceleton if domain is *.com.ua
-		if ($in{'domain'} =~ /^(\w|\-)+\.com\.ua$/) {
+		if ($in{'name'} =~ /^(\w|\-)+\.com\.ua$/) {
 			delete ($command_epp{'create'}->{'contacts'}->{'billing'});
 			delete ($command_epp{'create'}->{'license'});
 		}
-		$command_epp{'create'}->{'name'} = $in{'domain'};
+		$command_epp{'create'}->{'name'} = $in{'name'};
 		$command_epp{'create'}->{'contacts'}->{'tech'} = 'trol-cunic';
 		$command_epp{'create'}->{'contacts'}->{'admin'} = 'trol-cunic';
 		$command_epp{'create'}->{'registrant'} = 'trol-cunic';
@@ -1298,9 +1292,9 @@ print Dumper($data);
 
 	$expires = time();
 	$rows = 14;
-	# $out = "Домен <b>$in{'domain'}</b> не обнаружен";
+	# $out = "Домен <b>$in{'name'}</b> не обнаружен";
 		
-	$req = qq~domain:         $in{'domain'}
+	$req = qq~domain:         $in{'name'}
 descr:          V interesah clienta
 admin-c:        TROL-CUNIC
 tech-c:         TROL-CUNIC
@@ -1323,7 +1317,7 @@ changed:        TROL-CUNIC $date
 		$html,
 		'public_cgi'		=> $conf{'public_cgi'},
 		'info'			=> $out,
-		'domain'		=> $in{'domain'},
+		'name'		=> $in{'name'},
 		'request_data'	=> $req,
 		'rows'		=> $rows,
 		'expires'		=> $expires
@@ -1345,7 +1339,7 @@ sub main {
 		'public_css'	=> $conf{'public_css'},
 		'public_url'	=> $conf{'public_url'},
 		'public_cgi'	=> $conf{'public_cgi'},
-		'domain'	=> $in{'domain'}
+		'name'	=> $in{'name'}
 	);
 
 	# Create message
@@ -1429,10 +1423,9 @@ sub chck_domain {
 	my ($flag, $tmp, $resp, $string, $info, $epp, $mess, @temp);
 
 	# Clear request data
-	$in{'domain'} = lc($in{'domain'});
 
 	# Open check page if domain name incorrect
-	unless ($in{'domain'} =~ /^[0-9a-z\-\.]+\.[a-z]+$/) {
+	unless ($in{'name'} =~ /^[0-9a-z\-\.]+\.[a-z]+$/) {
 		&main(
 			'title'		=>'Проверка домена',
 			'messages'	=> "Проверьте корректность доменного имени."
@@ -1440,12 +1433,12 @@ sub chck_domain {
 		);
 	}
 
-	if ($in{'domain'}) {
+	if ($in{'name'}) {
 		# Connect to Epp server
 		$epp = &connect_epp();
 
 		# check domain
-		$info = $epp->domain_info($in{'domain'});
+		$info = $epp->domain_info($in{'name'});
 
 		&check_response($info, 2001);
 

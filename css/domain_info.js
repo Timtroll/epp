@@ -26,7 +26,7 @@ function MarkRead (cnt) {
 function AddInput(obj, nam) {
 	var cnt = document.getElementById(nam+'_count').value;
 	var new_input=document.createElement('li');
-	new_input.innerHTML='<span  onclick="DelInput(this.parentNode, \''+nam+'\')">x</span>';
+	new_input.innerHTML='<u onclick="DelInput(this.parentNode, \''+nam+'\')">x</u>';
 	new_input.innerHTML=new_input.innerHTML+'<input name="'+ nam +'_'+cnt+'" class="dump-edit">';
 	new_input.innerHTML=new_input.innerHTML+'<b onclick="AddInput(this.parentNode, \''+nam+'\')">+<b>';
 	if (obj.nextSibling) {
