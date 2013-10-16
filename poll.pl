@@ -57,6 +57,7 @@ if ($obj->{'message_id'}) {
 
 	# Ack this message
 	if ($obj->{'message_id'}) {
+print "=$obj->{'message_id'}=\n";
 		$ack = &get_ack($epp, $log, $obj->{'message_id'});
 	}
 
@@ -178,6 +179,7 @@ sub get_req {
 	$obj = $xml2json->XMLin($xml, KeyAttr => '');
 
 	# Add'new fields to message object
+print Dumper($obj);
 	if ($obj->{'response'}->{'msgQ'}->{'qDate'}) {
 		$obj->{'response'}->{'date'} = &date2sec($obj->{'response'}->{'msgQ'}->{'qDate'});
 	}

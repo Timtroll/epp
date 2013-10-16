@@ -84,7 +84,7 @@ sub domain_update {
 	}
 
 	# skip setting billing contact for *.kiev.ua
-	unless (($in{'name'} =~ /^(\w|\-)+\.kiev\.ua$/)||($in{'name'} =~ /^(\w|\-)+\.com\.ua$/)) {
+	unless (($in{'name'} =~ /^(\w|\-)+\.kiev\.ua$/)||($in{'name'} =~ /^(\w|\-)+\.od\.ua$/)||($in{'name'} =~ /^(\w|\-)+\.com\.ua$/)) {
 print "sdf\n\n";
 		$domain_sceleton->{'add'}->{'contacts'}->{'billing'} = $in{'contacts_billing'};
 	}
@@ -135,7 +135,7 @@ print "sdf\n\n";
 		'type' => 'updating'
 	};
 	
-print Dumper($info);
+#print Dumper($info);
 print Dumper($domain_sceleton);
 #exit;
 	# Send create domain request
@@ -149,18 +149,19 @@ print Dumper($domain_sceleton);
 	&check_response('', 2001, 2003, 2004, 2005, 2201, 2302, 2303, 2307,  2309);
 
 	# Store new domain
-	if (($Net::EPP::Simple::Code == 1000)||($Net::EPP::Simple::Code == 1000)) {
-# print Dumper($update);
-# exit;
+#	if (($Net::EPP::Simple::Code == 1000)||($Net::EPP::Simple::Code == 1000)) {
 		# Find and Update domain status to 'updating' in the base
 		@temp = $collections->find( { 'name' => $in{'name'} } )->all;
+print $temp[0]->{'name'}, "\n";
+print Dumper($update);
+#exit;
 		if (scalar(@temp) == 1) {
 			$collections->update( { '_id' => $temp[0]->{'_id'}}, { '$set' => { %{$update} } } );
 		}
 		else {
 			$out{'messages'} .= "В базе  несколько записей о домене $in{'name'}";
 		}
-	}
+#	}
 # print $Net::EPP::Simple::Code;
 # print $Net::EPP::Simple::Message;
 
@@ -244,6 +245,7 @@ sub domain_renew {
 
 	# Send create domain request
 	$epp = &connect_epp();
+#print Dumper($renew);
 
 	# Create new domain
 	$info = $epp->renew_domain($renew);
@@ -253,9 +255,13 @@ sub domain_renew {
 
 	# Store new domain
 	if ($Net::EPP::Simple::Code == 1000) {
-		$renew->{'date'} = time();
-		$renew->{'command'} = 'domain_renew';
-		$collections->insert( $renew );
+		$html = {
+			'type' 		=> 'updating',
+			'expires'	=> (&date2sec($html)+60*60*24*365),
+			'date'		=> &sec2date((&date2sec($html)+60*60*24*365), 'md'),
+			'exDate'	=> &sec2date((&date2sec($html)+60*60*24*365), 'iso')
+		};
+		$collections->update( { '_id' => $tmp[0]->{'_id'}}, { '$set' => { %{$html} } } );
 
 		$out{'info'} = "Домен поставлен в очередь на продление: ".$Net::EPP::Simple::Message;
 	}
