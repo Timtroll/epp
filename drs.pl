@@ -363,7 +363,7 @@ sub calendar {
 	}
 	$days .= "</tr>";
 	$flag = 0;
-	foreach $raw (1..5) {
+	foreach $raw (1..6) {
 		$days .= "<tr>";
 		foreach $day (1..7) {
 			if ($day > 5) { $class = 'dateh'; }
@@ -526,16 +526,6 @@ sub find_domains {
 
 		$html = &small_parsing(
 			$html,
-			'txt_expires'=> &create_command("Ending",
-						'list_domains'	=> 1,
-						'type_list'	=> 'expires',
-						'class'	=> 'expires',
-						'tag'		=> 'span',
-						'login'	=> $in{'login'},
-						'session'	=> $in{'session'},
-						'date'		=> $search,
-						'time'	=> $date
-					),
 			'txt_waiting'=> &create_command("Waiting",
 						'list_domains'	=> 1,
 						'type_list'	=> 'waiting',
@@ -569,8 +559,7 @@ sub find_domains {
 
 			'all'		=> $tmp[0],
 			'waiting'	=> $tmp[1],
-			'expired'	=> $tmp[2],
-			'expires'	=> $tmp[3]
+			'expired'	=> $tmp[2]
 		);
 	}
 	else {

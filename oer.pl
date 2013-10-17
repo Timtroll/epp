@@ -16,13 +16,13 @@ my $collections = &connect($conf{'database'}, $collection{'domains'});
 my @tmp = $collections->find( {}, { 'exDate' => 1 } )->all;
 
 foreach (@tmp) {
-	if ($_->{'exDate'} =~ s/1111Z/0000Z/) {
+#	if ($_->{'exDate'} =~ s/1111Z/0000Z/) {
 		print "$_->{'_id'} : $_->{'name'} = ";
 		print "$_->{'exDate'} = $_->{'expires'} = ";
 		$_->{'expires'} = &date2sec($_->{'exDate'});
 		print "$_->{'expires'}<br>\n";
-		# $collections->update( { '_id' => $_->{'_id'}}, { '$set' => { 'exDate' => $_->{'exDate'}, 'expires' => $_->{'expires'}} } );
-	}
+		$collections->update( { '_id' => $_->{'_id'}}, { '$set' => { 'expires' => $_->{'expires'}} } );
+#	}
 }
 
 
