@@ -297,8 +297,15 @@ sub create_rnd {
 	$amount = shift;
 
 	$amount--;
-	@chars = split('', 'Aa0Bb1Cc2Dd3Ee4Ff5Gg6Hh7Ii8Jj9KkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz');
-	$out = join("", @chars[ map{ rand @chars } (0 .. $amount) ]);
+	srand();
+	@chars = split('', 'AaBbCcDdEeFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz');
+	$out = join("", @chars[ map{ rand @chars } (0 .. ($amount-1)) ]);
+	@chars = split('', '~!@#$%^&*()_+-<>?=');
+	$out .= join("", @chars[ map{ rand @chars } (0 .. 1) ]);
+	@chars = split('', [0 .. 9]);
+	$out .= join("", @chars[ map{ rand @chars } (0 .. 1) ]);
+	@chars = split('', map{ rand @chars} (0 .. $#chars));
+	$out .= join("", @chars[ map{ rand @chars } (0 .. $#chars) ]);
 
 	return $out;
 }
