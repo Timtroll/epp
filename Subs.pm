@@ -266,12 +266,11 @@ sub sec2date {
 	}
 	# 2011-12-06T08:53:24.0948Z
 	elsif ($sep eq 'iso') {
-		$date = ($tmp[5]+1900)."-$tmp[4]-$tmp[3]T$tmp[2]:$tmp[1]:$tmp[0].1111Z";
+		$date = ($tmp[5]+1900)."-$tmp[4]-$tmp[3]T$tmp[2]:$tmp[1]:$tmp[0].0000Z";
 	}
 	# 2001-12-01 (yy-mm-dd where '-' is separeator)
 	elsif ($sep eq 'date') {
 		$date = ($tmp[5]+1900)."-".$tmp[4]."-".$tmp[3];
-#		$date = ($tmp[5]+1900)."-".$tmp[3]."-".$tmp[4];
 	}
 	# 01-02-2001 (dd-mm-yy where '-' is separeator)
 	else {

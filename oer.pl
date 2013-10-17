@@ -5,25 +5,40 @@ use warnings;
 use MongoDB;
 
 print "Content-type: text/html; charset = utf-8\nPragma: no-cache\n\n";
+our (%conf, %collection, %months, %week, %in, %tmpl, %mesg, %domain_mail, %command_epp, %commands, %menu_line);
+our (@week, @sceleton);
+our ($domain_sceleton, $domain_info);
+require 'drs.pm';
+use Subs;
 
-# Read list of domains
-# my $client = MongoDB::Connection -> new( host => 'mongodb://admin:r3dp0w3r@db1mongo.betterknow.com;27017' );
-# my $db = $client -> get_database( 'oerMaterials' );
-# my $collections = $db->get_collection( 'materials' );
+my $collections = &connect($conf{'database'}, $collection{'domains'});
 
-# # my @tmp = $collections -> find( { 'oer_type' => 1 } ) -> sort( { 'oer_type' => 1 } ) -> all;
+my @tmp = $collections->find( {}, { 'exDate' => 1 } )->all;
 
-# # foreach (@tmp) {
-	# print "<li>$_-{'oer_type'}</li>";
-# }
-
-open (FILE, '<./listing.txt') or die;
-open (OUT, '>./list.txt') or die($!);
-	while (<FILE>) {
-		unless (/\.404/) {
-			print "$_<br>";
-			print OUT $_;
-		}
+foreach (@tmp) {
+	if ($_->{'exDate'} =~ s/1111Z/0000Z/) {
+		print "$_->{'_id'} : $_->{'name'} = ";
+		print "$_->{'exDate'} = $_->{'expires'} = ";
+		$_->{'expires'} = &date2sec($_->{'exDate'});
+		print "$_->{'expires'}<br>\n";
+		# $collections->update( { '_id' => $_->{'_id'}}, { '$set' => { 'exDate' => $_->{'exDate'}, 'expires' => $_->{'expires'}} } );
 	}
-close OUT;
-close FILE;
+}
+
+
+sub connect {
+	my ($col, $client, $db, $base, $collections);
+	$base = shift;
+	$col = shift;
+
+	# Set collection name if not exists
+	unless ($base) { $base = $conf{'database'}; }
+	unless ($col) { $col = $collection{'domains'}; }
+
+	# Read list of domains
+	$client = MongoDB::Connection -> new(host => $conf{'db_link'});
+	$db = $client -> get_database( $base );
+	$collections = $db->get_collection( $col );
+
+	return $collections;
+}

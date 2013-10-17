@@ -71,7 +71,7 @@ sub domain_update {
 			'name'	=> $in{'name'},
 			'add'		=> {
 				'contacts'	=> {
-					'tech'		=> $in{'contacts_tech'},
+					'tech'	=> $in{'contacts_tech'},
 					'admin'	=> $in{'contacts_admin'}
 				},
 			},
@@ -149,7 +149,7 @@ print Dumper($domain_sceleton);
 	&check_response('', 2001, 2003, 2004, 2005, 2201, 2302, 2303, 2307,  2309);
 
 	# Store new domain
-#	if (($Net::EPP::Simple::Code == 1000)||($Net::EPP::Simple::Code == 1000)) {
+	if (($Net::EPP::Simple::Code == 1000)||($Net::EPP::Simple::Code == 1000)) {
 		# Find and Update domain status to 'updating' in the base
 		@temp = $collections->find( { 'name' => $in{'name'} } )->all;
 print $temp[0]->{'name'}, "\n";
@@ -161,7 +161,7 @@ print Dumper($update);
 		else {
 			$out{'messages'} .= "В базе  несколько записей о домене $in{'name'}";
 		}
-#	}
+	}
 # print $Net::EPP::Simple::Code;
 # print $Net::EPP::Simple::Message;
 

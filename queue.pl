@@ -48,7 +48,7 @@ foreach $key (@data) {
 	unless (scalar(keys %{$tmp})) {
 		# Change type to 'use' if database & Epp info are equal
 		$collection->update( { '_id' => $key->{'_id'}}, { '$set' => { 'type' => 'use' } } );
-		print $key->{'name'};
+		# print $key->{'name'};
 		&error_log($log, 'queue', "Success $key->{'type'} domain $key->{'name'}. Change '$key->{'type'}' to 'use'");
 		last;
 	}
