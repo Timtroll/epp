@@ -202,8 +202,6 @@ sub domain_update {
 			$out{'messages'} .= "В базе  несколько записей о домене $in{'name'}";
 		}
 	}
-# print $Net::EPP::Simple::Code;
-# print $Net::EPP::Simple::Message;
 
 	# Send create domain request
 	$out{'info'} = &info_table($domain_sceleton);
@@ -259,10 +257,10 @@ sub domain_auth {
 			$update->{'authInfo'} = $domain_sceleton -> {'chg'} -> {'authInfo'};
 			$update->{'upID'} = $conf{'epp_user'};
 			$collections->update( { '_id' => $temp[0]->{'_id'}}, { '$set' => $update } );
-			$out{'info'} = &info_table(
+			$out{'info'} = &info_table({
 				'Domain'	=> $in{'name'},
 				'AuthCode'	=> $domain_sceleton -> {'chg'} -> {'authInfo'}
-			);
+			});
 		}
 		else {
 			$out{'messages'} .= "В базе  несколько записей о домене $in{'name'}";
