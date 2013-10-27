@@ -349,13 +349,13 @@ span:hover {
 	color: braun;
 	padding-left:8px;
 	width: 12px;
-	height: 27px;
+	height: 20px;
 }
 .dump i {
     padding-top: 5px;
     vertical-align: middle;
     font-style: italic;
-    height: 27px;
+    height: 20px;
     cursor: text;
 }
 

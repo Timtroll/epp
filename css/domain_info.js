@@ -12,14 +12,11 @@ function PostData (obj, form, command) {
 	document.getElementById(form).submit();
 }
 function MarkRead (cnt) {
-	window.document.getElementById('id_'+cnt).className = 'mess';
-	window.document.getElementById('status_'+cnt).className = 'mess';
-	window.document.getElementById('title_'+cnt).className = 'mess';
-	window.document.getElementById('titl_'+cnt).className = 'mess';
-	window.document.getElementById('tit_'+cnt).className = 'mess';
-	window.document.getElementById('text_'+cnt).className = 'mess';
-	window.document.getElementById('textl_'+cnt).className = 'mess';
-	window.document.getElementById('date_'+cnt).className = 'mess';
+	var items = new Array('id_', 'date_', 'titl_', 'tit_', 'title_', 'text_', 'textl_', 'prev_', 'status_');
+	for(var i=0; i < items.length; i++) {
+		window.document.getElementById(items[i]+cnt).className = 'mess';
+	}
+
 	window.document.getElementById('message').className = 'hide';
 	window.document.getElementById('status_'+cnt).innerHTML = 'old';
 }

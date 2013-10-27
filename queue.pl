@@ -43,15 +43,31 @@ foreach $key (@data) {
 	if (($key->{'name'} =~ /^[\w\d]+\.ua$/)||($key->{'name'} =~ /^.*\.in\.ua$/)||($key->{'name'} =~ /^.*\.crimea\.ua$/)||($key->{'name'} =~ /^.*\.od\.ua$/)) {
 		push @skip, 'registrant';
 	}
-	$tmp = &cmp_obj($key, $request, \@skip);
+	if ($key->{'type'} eq 'updating') {
+		$tmp = &cmp_obj($key, $request, \@skip);
+print "$key->{'name'}\n";
+print Dumper($tmp);
+		unless (scalar(keys %{$tmp})) {
+			# Change type to 'use' if database & Epp info are equal
+			$collection->update( { '_id' => $key->{'_id'}}, { '$set' => { 'type' => 'use' } } );
 
-	unless (scalar(keys %{$tmp})) {
-		# Change type to 'use' if database & Epp info are equal
-		$collection->update( { '_id' => $key->{'_id'}}, { '$set' => { 'type' => 'use' } } );
-		# print $key->{'name'};
-		&error_log($log, 'queue', "Success $key->{'type'} domain $key->{'name'}. Change '$key->{'type'}' to 'use'");
-		last;
+			# print $key->{'name'};
+			&error_log($log, 'queue', "Success $key->{'type'} domain $key->{'name'}. Change '$key->{'type'}' to 'use'");
+			last;
+		}
 	}
+	elsif ($key->{'type'} eq 'creating') {
+print "$key->{'name'} $Net::EPP::Simple::Code\n";
+		if ($Net::EPP::Simple::Code == 1000) {
+			# Change type to 'use' if database & Epp info are equal
+			$collection->update( { '_id' => $key->{'_id'}}, { '$set' => { 'type' => 'use' } } );
+
+			# print $key->{'name'};
+			&error_log($log, 'queue', "Success $key->{'type'} domain $key->{'name'} was add. Change '$key->{'type'}' to 'use'");
+			last;
+		}
+	}
+
 	$request = $tmp = '';
 }
 

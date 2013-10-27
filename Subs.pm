@@ -8,6 +8,30 @@ require Exporter;
 @EXPORT = qw(cmp_array cmp_hash obj2utf hash2utf array2utf date2sec sec2date  small_parsing create_rnd prnerr);
 @EXPORT_OK = qw(cmp_array cmp_hash obj2utf hash2utf array2utf date2sec sec2date  small_parsing create_rnd prnerr);
 
+sub cmp_obj {
+	my ($data, $target, $tmp, $skip, @tmp, %tmp);
+	$data = shift; # source
+	$target = shift; # target
+	$skip = shift; # target
+
+	# Set fields skiped for check
+	map { $tmp{$_} = 1 } ( @{$skip} ) if (ref($skip) eq 'ARRAY');
+
+	$tmp = &cmp_hash($data, $target);
+
+	foreach (keys %{$tmp}) {
+		# skip non checked fields
+		if (exists $tmp{$_}) {
+			delete ($$tmp{$_});
+		}
+	}
+	%tmp = ();
+	@tmp = ();
+
+	return $tmp;
+}
+
+
 sub cmp_array {
 	my ($data, $target, $arrayd, $arrayt, $diff, @diff, %tmp);
 	$data = shift;
@@ -85,98 +109,6 @@ sub cmp_hash {
 		return;
 	}
 }
-
-# sub cmp_array {
-	# my ($data, $target, $tmp, $cnt, @diff);
-	# $data = shift;
-	# $target = shift;
-
-	# if (scalar(@{$data}) > scalar(@{$target})) {
-		# $cnt = scalar(@{$data});
-	# }
-	# else {
-		# $cnt = scalar(@{$target});
-	# }
-	# for (0..$cnt) {
-		# if ((ref($$data[$_]) eq 'HASH') && (ref($$data[$_]) eq 'HASH')) {
-			# $tmp = &cmp_hash($$data[$_], $$target[$_]);
-			# if (ref($tmp) eq 'HASH') {
-				# push @diff, $tmp;
-			# }	
-		# }
-		# elsif ((ref($$target[$_]) eq 'ARRAY') && (ref($$target[$_]) eq 'ARRAY')) {
-			# $tmp = &cmp_array($$data[$_], $$target[$_]);
-			# if (ref($tmp) eq 'ARRAY') {
-				# push @diff, $tmp;
-			# }
-		# }
-		# else {
-			# if ($$data[$_] && $$target[$_]) {
-				# if (($$data[$_] =~ /\D/) && ($$target[$_] =~ /\D/)) {
-					# unless ($$data[$_] eq $$target[$_]) {
-						# push @diff, $$target[$_];
-					# }
-				# }
-				# else {
-					# unless ($$data[$_] == $$target[$_]) {
-						# push @diff, $$target[$_];
-					# }
-				# }
-			# }
-		# }
-	# }
-
-	# if (scalar(@diff)) {
-		# return \@diff;
-	# }
-	# else {
-		# return;
-	# }
-# }
-
-# sub cmp_hash {
-	# my ($data, $target, $key, $tmp, %tmp);
-	# $data = shift;
-	# $target = shift;
-
-	# foreach $key (keys %{$data}) {
-		# if (exists($$target{$key})) {
-			# if ((ref($$data{$key}) eq 'HASH') && (ref($$target{$key}) eq 'HASH')) {
-				# $tmp = &cmp_hash($$data{$key}, $$target{$key});
-				# if (ref($tmp) eq 'HASH') {
-					# $tmp{$key} = $tmp;
-				# }
-			# }
-			# elsif ((ref($$data{$key}) eq 'ARRAY') && (ref($$target{$key}) eq 'ARRAY')) {
-				# $tmp = &cmp_array($$data{$key}, $$target{$key});
-				# if (ref($tmp) eq 'ARRAY') {
-					# $tmp{$key} = $tmp;
-				# }
-			# }
-			# else {
-				# if (($$data{$key} =~ /\D/) && ($$target{$key} =~ /\D/)) {
-					# unless ($$data{$key} eq $$target{$key}) {
-						# $tmp{$key} = $$target{$key};
-					# }
-				# }
-				# else {
-					# unless ($$data{$key} == $$target{$key}) {
-						# $tmp{$key} = $$target{$key};
-					# }
-				# }
-			# }
-		# }
-		# else {
-			# $tmp{$key} = $$target{$key};
-		# }
-	# }
-	# if (scalar(keys %tmp)) {
-		# return \%tmp;
-	# }
-	# else {
-		# return;
-	# }
-# }
 
 sub obj2utf {
 	my ($obj, $key);
@@ -298,12 +230,12 @@ sub create_rnd {
 	$amount--;
 	srand();
 	@chars = split('', 'AaBbCcDdEeFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz');
-	$out = join("", @chars[ map{ rand @chars } (0 .. ($amount-1)) ]);
-	@chars = split('', '~!@#$%^&*()_+-<>?=');
+	$out = join("", @chars[ map{ rand @chars } (0 .. ($amount-6)) ]);
+	@chars = split('', '!#$%*_');
 	$out .= join("", @chars[ map{ rand @chars } (0 .. 1) ]);
 	@chars = split('', [0 .. 9]);
 	$out .= join("", @chars[ map{ rand @chars } (0 .. 1) ]);
-	@chars = split('', map{ rand @chars} (0 .. $#chars));
+	@chars = split('', map{ rand @chars } (0 .. $#chars));
 	$out .= join("", @chars[ map{ rand @chars } (0 .. $#chars) ]);
 
 	return $out;
