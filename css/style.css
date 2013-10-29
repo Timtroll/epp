@@ -435,12 +435,14 @@ span:hover {
     border-radius: 5px;
     border: solid 1px #CCCCCC;
     box-shadow: 0 0 10px #CCCCCC;
+    -moz-box-shadow: 0px 0px 10px #cccccc;
+    -webkit-box-shadow: 0px 0px 10px #cccccc;
     z-index: 99998;
 }
 
 .close {
-    background: #CC3300;
-    color: #FFFFFF;
+    background: #ffffff;
+    color: #666666;
     line-height: 25px;
     position: absolute;
     left: -12px;
@@ -452,13 +454,14 @@ span:hover {
     -webkit-border-radius: 12px;
     -moz-border-radius: 12px;
     border-radius: 12px;
-    -moz-box-shadow: 1px 1px 3px #000000;
-    -webkit-box-shadow: 1px 1px 3px #000000;
-    box-shadow: 1px 1px 3px #000000;
+    -moz-box-shadow: 1px 1px 3px #cccccc;
+    -webkit-box-shadow: 1px 1px 3px #cccccc;
+    box-shadow: 1px 1px 3px #cccccc;
 }
 
 .close:hover {
-    background: #990000;
+    background: #aaaaaa;
+    color: #ffffff;
 }
 
 /* Country list*/

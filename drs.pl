@@ -1107,7 +1107,9 @@ sub list_domains {
 			'delete'	=> &create_command('Delete',
 						'domain_delete'	=> 1,
 						'name'		=> $data[$_]->{'name'}
-					)
+					),
+			'status'	=> $data[$_]->{'status'}[0],
+			'admin'		=> $data[$_]->{'contacts'}->{'admin'}
 		);
 
 		# Convert date from sec to europe format
