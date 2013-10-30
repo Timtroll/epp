@@ -1343,7 +1343,7 @@ sub query_contact {
 }
 
 sub query_domain {
-	my ($out, $collections, $data, $mess, $comm, $count, @tmp);
+	my ($out, $html, $collections, $data, $mess, $comm, $count, @tmp);
 	$collections = shift;
 
 	# check domain in the base
@@ -1418,7 +1418,7 @@ print Dumper($data);
 	# Create changed date
 	# $date = join('', reverse(split('/', &sec2date(time))));
 
-	# $html = &load_tempfile('file' => $tmpl{'request_form'});
+	$html = &load_tempfile('file' => $tmpl{'request_form'});
 
 	# $expires = time();
 	# $rows = 14;
@@ -1442,16 +1442,14 @@ print Dumper($data);
 	# # $req =~ s/kv\-.*$/TROL\-CUNIC/;
 	# # $req =~ s/ua\.drs/TROL\-MNT\-CUNIC/;
 
-	# # print request form
-	# $html = &small_parsing(
-		# $html,
-		# 'public_cgi'		=> $conf{'public_cgi'},
-		# 'info'			=> $out,
-		# 'name'		=> $in{'name'},
-		# 'request_data'	=> $req,
-		# 'rows'		=> $rows,
-		# 'expires'		=> $expires
-	# );
+	# print request form
+	$html = &small_parsing(
+		$html,
+		'public_css'	=> $conf{'public_css'},
+		'public_url'	=> $conf{'public_url'},
+		'public_cgi'	=> $conf{'public_cgi'},
+		'info'		=> $out
+	);
 
 	&main(
 		'content'	=> $out

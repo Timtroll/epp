@@ -1,39 +1,7 @@
 <form action="<%public_cgi%>" id="request_form" method="post">
 <table width="100%" border="0" cellspacing="0" cellpadding="0">
     <tr>
-      <td width="50%" align="left" valign="top" class='info'><%info%></td>
-      <td width="50%" align="left" valign="top"><table width="100%" border="0" cellpadding="2" cellspacing="2">
-          <tr>
-            <td width="130" align="center">тип операции </td>
-            <td><select name="operation" size="1" id="operation" class="wdth">
-                <option value="add">Add</option>
-                <option value="renew" selected="selected">Renew</option>
-                <option value="modify">Modify</option>
-                <option value="delete">Delete</option>
-                <option value="transfert">Transfert</option>
-                <option value="add_to_base">Только добавить в базу</option>
-              </select>
-            </td>
-          </tr>
-          <tr>
-            <td width="130" valign="top" align="center">текст запроса </td>
-            <td valign="top"><textarea name="request_data" rows="<%rows%>" class="wdth"><%request_data%></textarea>
-            </td>
-          </tr>
-          <tr>
-            <td width="110">&nbsp;</td>
-            <td><table width="100%" border="0" cellspacing="1" cellpadding="1">
-                <tr>
-                  <td width="10" valign="middle"><input type="checkbox" name="store" value="on" />
-                    <input type="hidden" name="name" value="<%name%>" />
-                    <input type="hidden" name="expires" value="<%expires%>" />
-                  </td>
-                  <td valign="middle">добавить в базу</td>
-                  <td width="80" align="right" valign="middle"><input type="submit" name="send_request" value="Отправить запрос" /></td>
-                </tr>
-              </table></td>
-          </tr>
-        </table></td>
-    </tr>
+      <td align="left" valign="top" class='info'><%info%></td>
+     </tr>
 </table>
 </form>
