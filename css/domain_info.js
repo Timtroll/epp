@@ -39,3 +39,11 @@ function AddInput(obj, nam) {
 function DelInput(obj, nam) {
 	document.getElementById(nam).removeChild(obj)
 }
+function Show(nam) {
+	if (document.getElementById(nam).className == 'hide') {
+		document.getElementById(nam).className = 'show';
+	}
+	else {
+		document.getElementById(nam).className = 'hide';
+	}
+}

@@ -200,7 +200,6 @@ sub log_poll {
 	$mess = shift;
 
 	$mess = "$obj->{'response'}->{'result'}->{'code'}: '$mess' $obj->{'response'}->{'result'}->{'msg'}.";
-print "$mess\n";
 	if ($obj->{'response'}->{'message_id'}) {
 		$mess .= " Message id: $obj->{'response'}->{'message_id'}";
 	}

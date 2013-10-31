@@ -39,6 +39,12 @@ span:hover {
     display: none;
 }
 
+.show {
+    display: block;
+    background-color: #f2f2f2;
+    padding-top:20px;
+}
+
 .val {
     float: right;
     padding-right: 8px;
@@ -250,6 +256,20 @@ span:hover {
     padding-left: 5px;
     cursor: pointer;
     cursor: hand;
+}
+
+.log-list span {
+    list-style: none;
+    float: left;
+    margin-right: 20px;
+    cursor: pointer;
+    cursor: hand;
+}
+
+.log-list i {
+    list-style: none;
+    float: left;
+    margin-right: 20px;
 }
 
 .domain-name li:hover {

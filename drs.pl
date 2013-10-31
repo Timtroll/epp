@@ -58,6 +58,7 @@ elsif ($in{'domain_save'})	{ &domain_save(&connect($conf{'database'}, $collectio
 elsif ($in{'domain_update'})	{ &domain_update(&connect($conf{'database'}, $collection{'domains'})); }
 elsif ($in{'domain_renew'})	{ &domain_renew(&connect($conf{'database'}, $collection{'domains'})); }
 elsif ($in{'domain_auth'})	{ &domain_auth(&connect($conf{'database'}, $collection{'domains'})); }
+elsif ($in{'domain_log'})	{ &domain_log(&connect($conf{'database'}, $collection{'log_actions'})); }
 else				{ &main('title' => 'Стартовая'); }
 
 sub prepare_epp_data {
@@ -128,9 +129,11 @@ sub prepare_epp_data {
 				$domain_sceleton -> {'chg'} -> {'registrant'} = $in{'registrant'};
 			}
 		}
-		if ($in{'contacts_billing'} ne $inepp -> {'contacts'} -> {'billing'}) {
-			$domain_sceleton -> {'add'} -> {'billing'} = $in{'contacts_billing'};
-			$domain_sceleton -> {'rem'} -> {'billing'} = $inepp -> {'contacts'} -> {'billing'};
+		if (exists  $inepp -> {'contacts'} -> {'billing'}) {
+			if ($in{'contacts_billing'} ne $inepp -> {'contacts'} -> {'billing'}) {
+				$domain_sceleton -> {'add'} -> {'billing'} = $in{'contacts_billing'};
+				$domain_sceleton -> {'rem'} -> {'billing'} = $inepp -> {'contacts'} -> {'billing'};
+			}
 		}
 	}
 
@@ -161,6 +164,9 @@ sub domain_update {
 
 	# Update domain by EPP
 	$epp->update_domain($domain_sceleton);
+
+	# log action
+	&action_log($in{'name'}, 'domain_update', $domain_sceleton, join("\n", ($Net::EPP::Simple::Error, $Net::EPP::Simple::Code, $Net::EPP::Simple::Message)));
 
 	# check response errors
 	&check_response('', 2001, 2003, 2004, 2005, 2201, 2302, 2303, 2307,  2309);
@@ -223,6 +229,32 @@ sub domain_update {
 	exit;
 }
 
+sub domain_log {
+	my ($collections, $html, @temp, %out);
+	$collections = shift;
+
+	# Find and Update domain status to 'updating' in the base
+	@temp = $collections->find( { 'name' => $in{'name'} } )->sort({ 'time' => -1})->all;
+	if (scalar(@temp)) {
+		$out{'info'} = &list_log(\@temp);
+	}
+
+	# Load mail frame template
+	$html = &load_tempfile('file' => $tmpl{'frame'});
+
+	$out{'title'} = "<div class='title'>LOG домена $in{'name'}</div>";
+	print &small_parsing(
+		$html,
+		'public_cgi'	=> $conf{'public_cgi'},
+		'public_css'	=> $conf{'public_css'},
+		'public_url'	=> $conf{'public_url'},
+		%out
+	);
+
+	$html = '';
+	exit;
+}
+
 sub domain_auth {
 	my ($collections, $epp, $html, $update, @temp, %out);
 	$collections = shift;
@@ -243,6 +275,9 @@ sub domain_auth {
 	$domain_sceleton -> {'name'} = $in{'name'};
 	$domain_sceleton -> {'chg'} -> {'authInfo'} = &create_rnd(11);
 	$epp->update_domain($domain_sceleton);
+
+	# log action
+	&action_log($in{'name'}, 'domain_auth', $domain_sceleton, join("\n", ($Net::EPP::Simple::Error, $Net::EPP::Simple::Code, $Net::EPP::Simple::Message)));
 
 	# check response errors
 	&check_response('', 2001, 2003, 2004, 2005, 2201, 2302, 2303, 2307,  2309);
@@ -361,6 +396,9 @@ sub domain_renew {
 	# Create new domain
 	$info = $epp->renew_domain($renew);
 
+	# log action
+	&action_log($in{'name'}, 'domain_renew', $renew, join("\n", ($Net::EPP::Simple::Error, $Net::EPP::Simple::Code, $Net::EPP::Simple::Message)));
+
 	# check response errors
 	&check_response('', 2105, 2201, 2303, 2304, 2309);
 
@@ -420,7 +458,7 @@ sub domain_create {
 	}
 	$domain_sceleton->{'ns'} = \@ns;
 	$domain_sceleton->{'status'} = \@status;
-	if ($in{'name'} =~ /^(\w|\-)+\.com\.ua$/) {
+	if (($in{'name'} =~ /^(\w|\-)+\.com\.ua$/)||($in{'name'} =~ /^(\w|\-)+\.kiev\.ua$/)) {
 		delete ($domain_sceleton->{'contacts'}->{'billing'});
 	}
 	if ($in{'name'} =~ /^(\w|\-)+\.ua$/) {
@@ -433,13 +471,16 @@ sub domain_create {
 	# Create new domain
 	$info = $epp->create_domain($domain_sceleton);
 	
+	# log action
+	&action_log($in{'name'}, 'domain_create', $domain_sceleton, join("\n", ($Net::EPP::Simple::Error, $Net::EPP::Simple::Code, $Net::EPP::Simple::Message)));
+
 	# check response errors
 	&check_response('', 2001, 2003, 2004, 2005, 2201, 2302, 2303, 2307,  2309);
 
 	# Store new domain to request queue
 	if (($Net::EPP::Simple::Code == 1000)||($Net::EPP::Simple::Code == 1001)) {
-		$domain_sceleton->{'date'} = time();
-		$domain_sceleton->{'expires'} = time();
+		$domain_sceleton->{'date'} = (&sec2date(time(), 'md'));
+		$domain_sceleton->{'expires'} = (time()+60*60*24*365);
 		$domain_sceleton->{'type'} = 'creating';
 		$collections->insert( $domain_sceleton );
 
@@ -935,27 +976,27 @@ sub list_contacts {
 
 	foreach (0..(scalar(@data) - 1)) {
 		%comm = (
-			'info'			=> "<li><a href='#modalopen' onClick=\"javascript:open_frame('$conf{'public_cgi'}?domain_info=1&name=".$data[$_]->{'name'}."');\" class='text'>info</a></li>",
-			'suspend'		=> &create_command('Suspend',
-							'domain_suspend'=> 1,
-							'name'		=> $data[$_]->{'name'}
-						),
+			'info'		=> "<li><a href='#modalopen' onClick=\"javascript:open_frame('$conf{'public_cgi'}?domain_info=1&name=".$data[$_]->{'name'}."');\" class='text'>info</a></li>",
+			'suspend'	=> &create_command('Suspend',
+						'domain_suspend'=> 1,
+						'name'		=> $data[$_]->{'name'}
+					),
 			'renew'		=> &create_command('Renew',
-							'domain_renew'	=> 1,
-							'name'		=> $data[$_]->{'name'}
-						),
-			'update'		=> &create_command('Modify',
-							'domain_update'	=> 1,
-							'name'		=> $data[$_]->{'name'}
-						),
-			'transfert'		=> &create_command('Transfert',
-							'domain_transfert'=> 1,
-							'name'		=> $data[$_]->{'name'}
-						),
-			'delete'		=> &create_command('Delete',
-							'domain_delete'	=> 1,
-							'name'		=> $data[$_]->{'name'}
-						)
+						'domain_renew'	=> 1,
+						'name'		=> $data[$_]->{'name'}
+					),
+			'update'	=> &create_command('Modify',
+						'domain_update'	=> 1,
+						'name'		=> $data[$_]->{'name'}
+					),
+			'transfert'	=> &create_command('Transfert',
+						'domain_transfert'=> 1,
+						'name'		=> $data[$_]->{'name'}
+					),
+			'delete'	=> &create_command('Delete',
+						'domain_delete'	=> 1,
+						'name'		=> $data[$_]->{'name'}
+					)
 		);
 
 		# Convert date from sec to europe format
@@ -965,8 +1006,8 @@ sub list_contacts {
 		$list .= &small_parsing(
 			$raw,
 			'public_cgi'	=> $conf{'public_cgi'},
-			'name'	=> &create_command($data[$_]->{'name'}, 'class' => 'dom'),
-			'class'	=> $class,
+			'name'		=> &create_command($data[$_]->{'name'}, 'class' => 'dom'),
+			'class'		=> $class,
 			'expires'	=> $data[$_]->{'expires'},
 			%comm
 		);
@@ -977,7 +1018,7 @@ sub list_contacts {
 
 	$html = &small_parsing(
 		$html,
-		'public_cgi'		=> $conf{'public_cgi'},
+		'public_cgi'	=> $conf{'public_cgi'},
 		'list_domains'	=> $list
 	);
 
@@ -986,6 +1027,36 @@ sub list_contacts {
 		'path'		=> $path,
 		'javascript'	=> "<script src='$conf{'public_url'}/css/domain_info.js'></script>"
 	);
+}
+
+sub list_log {
+	my ($list, $cnt, $key, $out, $line, $html);
+	$list = shift;
+
+	# Read templates
+	$line = &load_tempfile('file' => $tmpl{'log_line'});
+	$html = &load_tempfile('file' => $tmpl{'log_table'});
+
+	if (scalar(@{$list})) {
+		$cnt = 1;
+		foreach $key (@{$list}) {
+			$out .= &small_parsing(
+				$line,
+				'time'	=> &sec2date($key->{'time'}),
+				'command'=> $key->{'comm'}.$key->{'command'},
+				'error'	=> $key->{'comm'}.$key->{'error'},
+				'data'	=> &info_table($key->{'data'}),
+				'count'	=> $cnt
+			);
+			$cnt++;
+		}
+	}
+	$out = &small_parsing(
+		$html,
+		'list'	=> $out
+	);
+
+	return $out;
 }
 
 sub list_messages {
@@ -1104,6 +1175,7 @@ sub list_domains {
 						'domain_renew'	=> 1,
 						'name'		=> $data[$_]->{'name'}
 					),
+			'log'		=> "<li><a href='#modalopen' onClick=\"javascript:open_frame('$conf{'public_cgi'}?domain_log=1&frame=1&name=".$data[$_]->{'name'}."');\" class='text $data[$_]->{'type'}'>Log</a></li>",
 			'delete'	=> &create_command('Delete',
 						'domain_delete'	=> 1,
 						'name'		=> $data[$_]->{'name'}
@@ -1452,7 +1524,7 @@ print Dumper($data);
 	);
 
 	&main(
-		'content'	=> $out
+		'content'	=> $html
 	);
 }
 
@@ -1899,7 +1971,6 @@ sub connect {
 	unless ($col) { $col = $collection{'domains'}; }
 
 	# Read list of domains
-#	$client = MongoDB::MongoClient->new(host => $conf{'db_link'});
 	$client = MongoDB::Connection->new(host => $conf{'db_link'});
 	$db = $client->get_database( $base );
 	$collections = $db->get_collection( $col);
@@ -1907,23 +1978,27 @@ sub connect {
 	return $collections;
 }
 
-sub error_log {
-	my ($collection, $log, $type, $data, $srting);
-	$collection = shift;
-	$type = shift;
+sub action_log {
+	my ($log, $name, $comm, $data, $error, $srting);
+	$name = shift;
+	$comm = shift;
 	$data = shift;
+	$error = shift;
 
-	unless ($data) {
+	unless ($data || $name) {
 		return;
 	}
 
 	$srting = {
 		'time'	=> time(),
-		'type'		=> $type ? $type : '',
-		'data'		=> $data ? $data : ''
+		'name'		=> $name ? $name : '',
+		'command'	=> $comm ? $comm : '',
+		'data'		=> $data ? $data : '',
+		'error'		=> $error ? $error : ''
 	};
-	$collection->insert( $srting );
+	$log = &connect($conf{'database'}, $collection{'log_actions'});
+	$log->insert( $srting );
 
-	$data = $srting = '';
+	$data = $srting = $log = '';
 	return;
 }
