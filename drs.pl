@@ -481,6 +481,7 @@ sub domain_create {
 	if (($Net::EPP::Simple::Code == 1000)||($Net::EPP::Simple::Code == 1001)) {
 		$domain_sceleton->{'date'} = (&sec2date(time(), 'md'));
 		$domain_sceleton->{'expires'} = (time()+60*60*24*365);
+		$domain_sceleton->{'exDate'} = (&sec2date(time(), 'iso'));
 		$domain_sceleton->{'type'} = 'creating';
 		$collections->insert( $domain_sceleton );
 
@@ -781,7 +782,7 @@ sub print_hash {
 			if ($flag) {
 				$out .= "<li>";
 				if (/^cc$/) {
-					$out .= "<table width='70%' border='0' cellpadding='0' cellspacing='0' align='right'><tr><td width='8%'><input class='dump-edit' name='".$name."_$_"."' id='".$name."_$_"."' type='text' size='4' maxlength='2' onkeyup='javascript:chkChar(this);Country();' value='".$info->{$_}."'><div class='country-none' id='countr_list'></div></td><td width='20'>&nbsp;</td><td class='cntr'><div id='countr_none'>Латинская аббревиатура (например RU)</div><div id='country' class='country'></div></td></tr></table>";
+					$out .= "<table width='80%' border='0' cellpadding='0' cellspacing='0' align='right'><tr><td width='8%'><input class='dump-edit' name='".$name."_$_"."' id='".$name."_$_"."' type='text' size='4' maxlength='2' onkeyup='javascript:chkChar(this);Country();' value='".$info->{$_}."'><div class='country-none' id='countr_list'></div></td><td width='20'>&nbsp;</td><td class='cntr'><div id='countr_none'>Латинская аббревиатура (например RU)</div><div id='country' class='country'></div></td></tr></table>";
 					push @sceleton, $name."_$_";
 				}
 				else {
@@ -1191,7 +1192,7 @@ sub list_domains {
 		$list .= &small_parsing(
 			$raw,
 			'public_cgi'	=> $conf{'public_cgi'},
-			'name'	=> &create_command($data[$_]->{'name'}, 'class' => "dom $data[$_]->{'type'}"),
+			'name'	=> $data[$_]->{'name'},
 			'class'	=> $class,
 			'expires'	=> $data[$_]->{'expires'},
 			%comm
@@ -1404,9 +1405,9 @@ sub query_contact {
 
 	$html = &small_parsing(
 		$html,
-		'public_css'		=> $conf{'public_css'},
-		'public_cgi'		=> $conf{'public_cgi'},
-		'info'			=> $out
+		'public_css'	=> $conf{'public_css'},
+		'public_cgi'	=> $conf{'public_cgi'},
+		'info'		=> $out
 	);
 
 	&main(

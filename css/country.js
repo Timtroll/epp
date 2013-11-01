@@ -259,14 +259,14 @@ function Country () {
 	for(var key in country) {
 		var kkey = key.toUpperCase();
 		if (kkey == kcc) {
-			window.document.getElementById('country').innerHTML = '<b>[' + key + '] </b>' + country[key];
+			window.document.getElementById('country').innerHTML = '[' + key + '] ' + country[key];
 			window.document.getElementById('country').className = 'country';
 			flag = 1;
 		}
 		else {
 			var find = key.indexOf(kcc);
 			if (find == 0) {
-				countr = countr + "<li onclick=\"javascript:SelCountry('" + key + "');\"><b>[" + key + ']</b> ' + country[key] +'</li>';
+				countr = countr + "<li onclick=\"javascript:SelCountry('" + key + "');\">[" + key + '] ' + country[key] +'</li>';
 			}
 		}
 	}

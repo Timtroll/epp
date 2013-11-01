@@ -1,3 +1,6 @@
+ul {
+	padding-left:30px;
+}
 span {
     cursor: pointer;
     cursor: hand;
@@ -341,7 +344,8 @@ span:hover {
 /* Dumper */
 .dump {
     text-decoration: none;
-    margin: 0;
+    padding: 1px;
+    margin: 0px;
 }
 
 .dynamic {
@@ -386,14 +390,14 @@ span:hover {
 
 .dump-edit {
     float: right;
-    width: 70%;
+    width: 80%;
     border: solid 1px #CCCCCC;
     padding: 2px;
 }
 
 .dump-text {
     float: right;
-    width: 70%;
+    width: 80%;
 //    border: solid 1px #CCCCCC;
     padding-top: 2px;
     padding-bottom: 2px;
@@ -404,7 +408,7 @@ span:hover {
 
 .dump-cc {
     float: right;
-    width: 70%;
+    width: 80%;
     border: solid 1px #CCCCCC;
     padding: 2px;
 }
@@ -499,7 +503,7 @@ span:hover {
 .country-list {
     display: block;
     position: absolute;
-    width: 360px;
+    width: 400px;
     overflow: auto;
     background-color: #FAFAFA;
     border: solid 1px #CCCCCC;
