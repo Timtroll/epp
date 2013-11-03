@@ -43,8 +43,8 @@ if ($in{'query_domain'})	{ &query_domain(&connect($conf{'database'}, $collection
 elsif ($in{'query_contact'})	{ &query_contact(&connect($conf{'database'}, $collection{'cantacts'})); }
 elsif ($in{'send_request'})	{ &send_request(&connect($conf{'database'}, $collection{'domains'})); }
 elsif ($in{'list_domains'})	{ &list_domains(&connect($conf{'database'}, $collection{'domains'})); }
-elsif ($in{'list_waiting'})	{ $in{'type_list'} = 'waiting'; &list_domains(&connect($conf{'database'}, $collection{'domains'})); }
-elsif ($in{'list_ending'})	{ $in{'type_list'} = 'ending'; &list_domains(&connect($conf{'database'}, $collection{'domains'})); }
+# elsif ($in{'list_waiting'})	{ $in{'type_list'} = 'waiting'; &list_domains(&connect($conf{'database'}, $collection{'domains'})); }
+# elsif ($in{'list_ending'})	{ $in{'type_list'} = 'ending'; &list_domains(&connect($conf{'database'}, $collection{'domains'})); }
 elsif ($in{'list_contacts'})	{ &list_contacts(&connect($conf{'database'}, $collection{'contacts'})); }
 elsif ($in{'list_messages'})	{ &list_messages(&connect($conf{'database'}, $collection{'messages'})); }
 elsif ($in{'list_transfer'})	{ &list_transfer(&connect($conf{'database'}, $collection{'messages'})); }
@@ -497,17 +497,42 @@ sub domain_create {
 	);
 }
 
+sub findyear {
+	my ($month, $year, $feb, $day, %days);
+	$month = shift;
+	$year = shift;
+
+	$year = $year+1900;
+	$feb = (localtime(timelocal(0, 0, 0, 1, 2, $year)-60*60*24))[3];
+	%days = ( 0 => 31, 1 => $feb, 2 => 31, 3 => 30, 4 => 31, 5 => 30, 6 => 31, 7 => 31, 8 => 30, 9 => 31, 10 => 30, 11 => 31 );
+
+	$day = (localtime(timelocal(0, 0, 0, 1, $month, $year)))[6];
+	unless ($day) { $day = 6; } else { $day--; }
+
+	if ((($days{$month}+$day)/7) - int(($days{$month}+$day)/7)) {
+		$day = int((($days{$month}+$day)/7)+1);
+	}
+	else {
+		$day = int(($days{$month}+$day)/7);
+	}
+	
+	return $day;
+}
+
 sub calendar {
-	my ($collections, $html, $months, $day, $days, $list_month , $raw, $datetime, $class, $flag, $list, $curdate, @tmp, @date);
+	my ($collections, $html, $months, $day, $days, $list_month, $raw, $datetime, $class, $flag, $list, $curdate, $height, $last, $year, $mnth, $cnt, @tmp, @date, @temp);
 	$collections = shift;
 
-	# Get 01.01.current_year 00:00:00 in seconds
+	# Get day+month & current date in seconds
 	$datetime = time;
 	@tmp = localtime($datetime);
-	$curdate = $tmp[3].$tmp[4];
+	$curdate = &sec2date($datetime, 'md');
+
+	# Get 01.01.current_year 00:00:00 in seconds
 	unless ($in{'month'}) { $in{'month'} = $tmp[4]; }
 	else { $in{'month'}--; }
-	$datetime = timelocal(0, 0, 0, 1, $in{'month'}, $tmp[5]);
+	unless ($in{'year'}) { $in{'year'} = $tmp[5] + 1900; }
+	$datetime = timelocal(0, 0, 0, 1, $in{'month'}, $in{'year'});
 
 	$days = "<table cellspacing='1' cellspacing='1'  border='0' width='100%'  height='100%' style='height:100%'><tr>";
 	foreach (@week) {
@@ -515,7 +540,9 @@ sub calendar {
 	}
 	$days .= "</tr>";
 	$flag = 0;
-	foreach $raw (1..6) {
+	$last = &findyear($in{'month'}, $tmp[5]);
+	$height = int(100/$last);
+	foreach $raw (1..$last) {
 		$days .= "<tr>";
 		foreach $day (1..7) {
 			if ($day > 5) { $class = 'dateh'; }
@@ -524,44 +551,82 @@ sub calendar {
 			unless ($tmp[6]) { $tmp[6] = 7; };
 
 			# highlight current date
-			if ($curdate == $tmp[3].$tmp[4]) { $class = 'datec'; }
+			if ($curdate == &sec2date($datetime, 'md')) { $class = 'datec'; }
 
 			$list = '';
 			$list = &find_domains($datetime, $collections);
 			if ($raw == 1) {
 				if ($tmp[6] == $day) {
-					$days .= "<td class='$class'><i><b>".&sec2date($datetime, '.')."</b></i>$list</td>";
+					$days .= "<td class='$class' height='$height%'><i><b>".&sec2date($datetime, '.')."</b></i>$list</td>";
 					$flag = 1;
 				}
-				else { $days .= "<td class='dat'></td>"; }
+				else { $days .= "<td class='dat' height='$height%'></td>"; }
 			}
 			else {
 				if ($in{'month'} == $tmp[4]) {
-					$days .= "<td class='$class'><i><b>".&sec2date($datetime, '.')."</b></i>$list</td>";
+					$days .= "<td class='$class' height='$height%'><i><b>".&sec2date($datetime, '.')."</b></i>$list</td>";
 					$flag = 1;
 				}
-				else { $days .= "<td class='dat'></td>"; }
+				else { $days .= "<td class='dat' height='$height%'></td>"; }
 			}
 			if ($flag) {
 				$flag = 0;
-				$datetime = $datetime + 86400;
+				$datetime = $datetime + 60*60*24;
 			}
 		}
 		$days .= "</tr>";
 	}
 	$days .= "</table";
 
+	my $year = $in{'year'};
+	my @temp = ();
+	my $mnth = $in{'month'}+1;
+	my $cnt = 6;
+	foreach (1..6) {
+		$mnth--;
+		if ($mnth) {
+			unshift @temp, "$cnt-$mnth-$year";
+		}
+		else {
+			$mnth = 12;
+			$year--;
+			unshift @temp, "$cnt-$mnth-$year";
+		}
+		$cnt--;
+	}
 
-	foreach (sort {$a <=> $b} keys %months) {
-		if ($in{'month'}+1 == $_) { $class='month-cur'; }
+	push @temp, "7-".($in{'month'}+1);
+	$mnth = $in{'month'}+1;
+	$year = $in{'year'};
+	$cnt = 8;
+	foreach (1..6) {
+		$mnth++;
+		if ($mnth <= 12) {
+			push @temp, "$cnt-$mnth-$year";
+		}
+		else {
+			$mnth = 1;
+			$year++;
+			push @temp, "$cnt-$mnth-$year";
+		}
+		$cnt++;
+	}
+
+	@tmp = ();
+	foreach (@temp) {
+		@tmp = split('-', $_);
+		if ($in{'month'}+1 == $tmp[1]) { $class='month-cur'; }
 		else { $class=''; }
+		if ($tmp[1] == 1) { $list_month .= "<br><br><span>$tmp[2]</span>"; }
+		if (($tmp[0] == 1) && ($tmp[1] != 1)) { $list_month = "<span>$tmp[2]</span>"; }
 		$list_month .= &create_command(
-			$months{$_},
+			$months{$tmp[1]},
 			'calendar'	=> 1,
-			'class'	=> $class,
-			'login'	=> $in{'login'},
+			'class'		=> $class,
+			'login'		=> $in{'login'},
 			'session'	=> $in{'session'},
-			'month'	=> $_
+			'year'		=> $tmp[2],
+			'month'		=> $tmp[1]
 		);
 	}
 
@@ -571,7 +636,8 @@ sub calendar {
 	$html = &small_parsing(
 		$html,
 		'public_cgi'	=> $conf{'public_cgi'},
-		'days'	=> $days,
+		'days'		=> $days,
+		'year'		=> $in{'year'},
 		'months'	=> $list_month
 	);
 
@@ -659,59 +725,65 @@ sub find_domains {
 	
 	# create time range
 	@tmp = localtime($date);
+	# variable for check domain expires (current time + )
+	$curtime = timelocal(0, 0, 0, $tmp[3], $tmp[4], $tmp[5]);
+	$curtime = $curtime + 60*60*24-1;
+
+	# Create request to find all domains for current date
 	if ($tmp[3] < 10) { $tmp[3] = "0".$tmp[3]; }
 	$tmp[4]++;
 	$search = $tmp[4].$tmp[3];
 	if ($tmp[4] < 10) { $search = "0".$search; }
+
 	@tmp = ();
 	$tmp[0] = $collections->find( { 'date' => $search } )->count;
-
-	# variable for check domain expires (current time + )
-	$curtime = time + 86400;
 	if ($tmp[0]) {
-		$tmp[1] = $collections->find( { 'date' => $search ,  'status.0' => 'ok', 'expires' => { '$lt' => $curtime } } ) ->count;
-		$tmp[2] = $collections->find( { 'date' => $search ,  'status.0' => 'ok', 'expires' => { '$gt' => $curtime } } ) ->count;
-		$tmp[3] = $collections->find( { 'date' => $search ,  'status.0' => qr/hold/i } ) ->count;
+		# Extended domains
+		$tmp[1] = $collections->find( { 'date' => $search ,  'status.0' => {'$ne' => 'ServerHold'}, 'expires' => { '$gt' => $curtime, '$lt' => ($curtime+60*60*24*367) } } ) ->count;
+		# expiring domains
+		$tmp[2] = $collections->find( { 'date' => $search ,  'status.0' => {'$ne' => 'ServerHold'}, 'expires' => { '$lt' => $curtime } } ) ->count;
+		# Hold domains
+		$tmp[3] = $collections->find( { 'date' => $search ,  'status.0' => qr/hold/i } ) -> count;
 
 		# Fotmat output
 		map { unless ($_) { $_ = " $_"; } } (@tmp);
 
 		$html = &small_parsing(
 			$html,
-			'txt_waiting'=> &create_command("Waiting",
+			'txt_expiring'=> &create_command("Expiring",
 						'list_domains'	=> 1,
-						'type_list'	=> 'waiting',
-						'class'	=> 'waiting',
+						'type_list'	=> 'expiring',
+						'class'		=> 'waiting',
 						'tag'		=> 'span',
-						'login'	=> $in{'login'},
+						'login'		=> $in{'login'},
 						'session'	=> $in{'session'},
 						'date'		=> $search,
-						'time'	=> $date
+						'time'		=> $date
 					),
-			'txt_expired'=> &create_command("Expired",
+			'txt_extended'=> &create_command("Extended",
 						'list_domains'	=> 1,
-						'type_list'	=> 'expired',
-						'class'	=> 'expired',
+						'type_list'	=> 'extended',
+						'class'		=> 'expiring',
 						'tag'		=> 'span',
-						'login'	=> $in{'login'},
+						'login'		=> $in{'login'},
 						'session'	=> $in{'session'},
 						'date'		=> $search,
-						'time'	=> $date
+						'time'		=> $date
 					),
 			'txt_all'	=> &create_command("Amount",
 						'list_domains'	=> 1,
 						'type_list'	=> 'all',
-						'class'	=> 'all',
+						'class'		=> 'all',
 						'tag'		=> 'span',
-						'login'	=> $in{'login'},
+						'login'		=> $in{'login'},
 						'session'	=> $in{'session'},
 						'date'		=> $search,
-						'time'	=> $date
+						'time'		=> $date
 					),
 
 			'all'		=> $tmp[0],
-			'waiting'	=> $tmp[1],
-			'expired'	=> $tmp[2]
+			'extended'	=> $tmp[1],
+			'expiring'	=> $tmp[2]
 		);
 	}
 	else {
@@ -782,7 +854,7 @@ sub print_hash {
 			if ($flag) {
 				$out .= "<li>";
 				if (/^cc$/) {
-					$out .= "<table width='80%' border='0' cellpadding='0' cellspacing='0' align='right'><tr><td width='8%'><input class='dump-edit' name='".$name."_$_"."' id='".$name."_$_"."' type='text' size='4' maxlength='2' onkeyup='javascript:chkChar(this);Country();' value='".$info->{$_}."'><div class='country-none' id='countr_list'></div></td><td width='20'>&nbsp;</td><td class='cntr'><div id='countr_none'>Латинская аббревиатура (например RU)</div><div id='country' class='country'></div></td></tr></table>";
+					$out .= "<table width='74%' border='0' cellpadding='0' cellspacing='0' align='right'><tr><td width='8%'><input class='dump-edit' name='".$name."_$_"."' id='".$name."_$_"."' type='text' size='4' maxlength='2' onkeyup='javascript:chkChar(this);Country();' value='".$info->{$_}."'><div class='country-none' id='countr_list'></div></td><td width='20'>&nbsp;</td><td class='cntr'><div id='countr_none'>Латинская аббревиатура (например RU)</div><div id='country' class='country'></div></td></tr></table>";
 					push @sceleton, $name."_$_";
 				}
 				else {
@@ -1134,17 +1206,13 @@ sub list_domains {
 		@data = $collections->find( { 'date' => $in{'date'} } )->sort( {'name' => 1} )->all;
 		$path = $mesg{'list_domains_all'}.&sec2date($in{'time'},'.');
 	}
-	elsif (($in{'type_list'} eq 'expires') && ($in{'date'})) {
-		@data = $collections->find( { 'date' => $in{'date'},  'status.0' => qr/hold/i } )->sort( {'name' => 1} )->all;
-		$path = $mesg{'list_domains_end'}.&sec2date($in{'time'},'.');
+	elsif (($in{'type_list'} eq 'extended') && ($in{'date'})) {
+		@data = $collections->find( { 'date' => $in{'date'},  'status.0' => {'$ne' => 'ServerHold'}, 'expires' => { '$gt' => (&date2sec(&sec2date($in{'time'}, 'iso'))+60*60*24-1), '$lt' => (&date2sec(&sec2date($in{'time'}, 'iso'))+60*60*24*366-1),  } } )->sort( {'name' => 1} )->all;
+		$path = $mesg{'list_domains_extented'}.&sec2date($in{'time'},'.');
 	}
-	elsif (($in{'type_list'} eq 'expired') && ($in{'date'})) {
-		@data = $collections->find( { 'date' => $in{'date'},  'status.0' => 'ok', 'expires' => { '$gt' => time } } )->sort( {'name' => 1} )->all;
-		$path = $mesg{'list_domains_ok'}.&sec2date($in{'time'},'.');
-	}
-	elsif (($in{'type_list'} eq 'waiting') && ($in{'date'})) {
-		@data = $collections->find( { 'date' => $in{'date'},  'status.0' => 'ok', 'expires' => { '$lt' => time } } )->sort( {'name' => 1} )->all;
-		$path = $mesg{'list_domains_wait'}.&sec2date($in{'time'},'.');
+	elsif (($in{'type_list'} eq 'expiring') && ($in{'date'})) {
+		@data = $collections->find( { 'date' => $in{'date'},  'status.0' => {'$ne' => 'ServerHold'}, 'expires' => { '$lt' => (&date2sec(&sec2date($in{'time'}, 'iso'))+60*60*24-1) } } )->sort( {'name' => 1} )->all;
+		$path = $mesg{'list_domains_expiring'}.&sec2date($in{'time'},'.');
 	}
 	elsif (($in{'type_list'} eq 'waiting')) {
 		@data = $collections->find( { 'status.0' => 'ok', 'expires' => { '$gt' => time } } )->sort( {'name' => 1} )->all;

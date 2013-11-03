@@ -74,7 +74,7 @@ span:hover {
     font-style: italic;
 }
 
-.expired {
+.expiring {
     font-size: 11px;
     font-family: Verdana, Arial, Helvetica, sans-serif;
     color: #666666;
@@ -138,7 +138,6 @@ span:hover {
 }
 
 .datec {
-    height: 16%;
     background-color: #FFFFFF;
     width: 14%;
     vertical-align: top;
@@ -148,7 +147,6 @@ span:hover {
 }
 
 .date {
-    height: 16%;
     background-color: #F5F5F5;
     width: 14%;
     vertical-align: top;
@@ -157,7 +155,6 @@ span:hover {
 }
 
 .dateh {
-    height: 16%;
     background-color: #FFEFE4;
     width: 14%;
     vertical-align: top;
@@ -166,7 +163,6 @@ span:hover {
 }
 
 .dat {
-    height: 16%;
     width: 14%;
 }
 
@@ -390,14 +386,14 @@ span:hover {
 
 .dump-edit {
     float: right;
-    width: 80%;
+    width: 73%;
     border: solid 1px #CCCCCC;
     padding: 2px;
 }
 
 .dump-text {
     float: right;
-    width: 80%;
+    width: 73%;
 //    border: solid 1px #CCCCCC;
     padding-top: 2px;
     padding-bottom: 2px;
@@ -408,7 +404,7 @@ span:hover {
 
 .dump-cc {
     float: right;
-    width: 80%;
+    width: 73%;
     border: solid 1px #CCCCCC;
     padding: 2px;
 }
