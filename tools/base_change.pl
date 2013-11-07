@@ -103,6 +103,7 @@ sub sec2date {
 
 	# 1101 (month+day)
 	if ($sep eq 'md') {
+		$tmp[4] =~ s/^0//;
 		$date = $tmp[4].$tmp[3];
 	}
 	# 2011-12-06T08:53:24.0948Z

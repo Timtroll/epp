@@ -42,14 +42,14 @@ $CGI::POST_MAX = 16384;
 if ($in{'query_domain'})	{ &query_domain(&connect($conf{'database'}, $collection{'domains'})); }
 elsif ($in{'query_contact'})	{ &query_contact(&connect($conf{'database'}, $collection{'cantacts'})); }
 elsif ($in{'send_request'})	{ &send_request(&connect($conf{'database'}, $collection{'domains'})); }
-elsif ($in{'list_domains'})	{ &list_domains(&connect($conf{'database'}, $collection{'domains'})); }
+elsif ($in{'list_domains'})	{ &list_domains(&connect($conf{'database'}, $collection{'domains'}), &connect($conf{'database'}, $collection{'zones'})); }
 # elsif ($in{'list_waiting'})	{ $in{'type_list'} = 'waiting'; &list_domains(&connect($conf{'database'}, $collection{'domains'})); }
 # elsif ($in{'list_ending'})	{ $in{'type_list'} = 'ending'; &list_domains(&connect($conf{'database'}, $collection{'domains'})); }
 elsif ($in{'list_contacts'})	{ &list_contacts(&connect($conf{'database'}, $collection{'contacts'})); }
 elsif ($in{'list_messages'})	{ &list_messages(&connect($conf{'database'}, $collection{'messages'})); }
 elsif ($in{'list_transfer'})	{ &list_transfer(&connect($conf{'database'}, $collection{'messages'})); }
 elsif ($in{'domain_info'})	{ &domain_info(&connect($conf{'database'}, $collection{'domains'})); }
-elsif ($in{'calendar'})		{ &calendar(&connect($conf{'database'}, $collection{'domains'})); }
+elsif ($in{'calendar'})		{ &calendar(&connect($conf{'database'}, $collection{'domains'}), &connect($conf{'database'}, $collection{'zones'})); }
 elsif ($in{'price'})		{ &get_price(&connect($conf{'database'}, $collection{'zones'})); }
 elsif ($in{'get_price'})	{ &get_price(&connect($conf{'database'}, $collection{'zones'})); }
 elsif ($in{'message_read'})	{ &message_read(&connect($conf{'database'}, $collection{'messages'})); }
@@ -57,6 +57,7 @@ elsif ($in{'domain_create'})	{ &domain_create(&connect($conf{'database'}, $colle
 elsif ($in{'domain_save'})	{ &domain_save(&connect($conf{'database'}, $collection{'domains'})); }
 elsif ($in{'domain_update'})	{ &domain_update(&connect($conf{'database'}, $collection{'domains'})); }
 elsif ($in{'domain_renew'})	{ &domain_renew(&connect($conf{'database'}, $collection{'domains'})); }
+elsif ($in{'domain_transfer'})	{ &domain_transfer(&connect($conf{'database'}, $collection{'domains'})); }
 elsif ($in{'domain_auth'})	{ &domain_auth(&connect($conf{'database'}, $collection{'domains'})); }
 elsif ($in{'domain_log'})	{ &domain_log(&connect($conf{'database'}, $collection{'log_actions'})); }
 else				{ &main('title' => 'Стартовая'); }
@@ -367,6 +368,27 @@ sub domain_save {
 	);
 }
 
+sub domain_transfer {
+	my ($collections, $epp, $info);
+	$collections = shift;
+
+	# Send create domain request
+	$epp = &connect_epp();
+
+$in{'name'} = 'indrajute.com';
+$in{'authInfo'} = 'WSsB2cQq86';
+print "$in{'name'}, $in{'authInfo'}<br>";
+	$info = $epp->domain_transfer_query($in{'name'});
+print Dumper($info);
+exit;
+	# Create new domain
+	$info = $epp->domain_transfer_request($in{'name'}, $in{'authInfo'}, 1);
+print Dumper($info);
+print "\n";
+print join("\n", ($Net::EPP::Simple::Error, $Net::EPP::Simple::Code, $Net::EPP::Simple::Message));
+exit;
+}
+
 sub domain_renew {
 	my ($collections, $epp, $count, $renew, $info, $html, @tmp, %out);
 	$collections = shift;
@@ -520,8 +542,9 @@ sub findyear {
 }
 
 sub calendar {
-	my ($collections, $html, $months, $day, $days, $list_month, $raw, $datetime, $class, $flag, $list, $curdate, $height, $last, $year, $mnth, $cnt, @tmp, @date, @temp);
-	$collections = shift;
+	my ($domains, $zones, $total, $price, $html, $months, $day, $days, $list_month, $raw, $datetime, $class, $flag, $list, $curdate, $height, $last, $year, $mnth, $cnt, @tmp, @date, @temp, @domains, @zones, %zones);
+	$domains = shift;
+	$zones = shift;
 
 	# Get day+month & current date in seconds
 	$datetime = time;
@@ -533,14 +556,23 @@ sub calendar {
 	else { $in{'month'}--; }
 	unless ($in{'year'}) { $in{'year'} = $tmp[5] + 1900; }
 	$datetime = timelocal(0, 0, 0, 1, $in{'month'}, $in{'year'});
+	$last = &findyear($in{'month'}, $tmp[5]);
+
+	# read prices for all domains for current month
+	@domains = $domains->find( { 'date' => { '$gte' => (($in{'month'}+1)."01"), '$lte' => (($in{'month'}+1).$last) } })->all;
+# print "$in{'month'}<br>";
+# foreach (@domains) {
+	# print $_->{'date'}, "=$curdate=<br>";
+# }
+# print scalar(@domains);
+	@zones = $zones->find()->all;
+	$price = 2;
+	map { $zones{$_->{'zone'}} = $_->{'price'}[$price]; } (@zones);
 
 	$days = "<table cellspacing='1' cellspacing='1'  border='0' width='100%'  height='100%' style='height:100%'><tr>";
-	foreach (@week) {
-		$days .= "<td class='day'>$week{$_}</td>";
-	}
+	map { $days .= "<td class='day'>$week{$_}</td>"; } (@week);
 	$days .= "</tr>";
-	$flag = 0;
-	$last = &findyear($in{'month'}, $tmp[5]);
+	$flag = $total = 0;
 	$height = int(100/$last);
 	foreach $raw (1..$last) {
 		$days .= "<tr>";
@@ -554,7 +586,8 @@ sub calendar {
 			if ($curdate == &sec2date($datetime, 'md')) { $class = 'datec'; }
 
 			$list = '';
-			$list = &find_domains($datetime, $collections);
+			$price = 0;
+			($list, $price) = &find_domains($datetime, \%zones, \@domains);
 			if ($raw == 1) {
 				if ($tmp[6] == $day) {
 					$days .= "<td class='$class' height='$height%'><i><b>".&sec2date($datetime, '.')."</b></i>$list</td>";
@@ -570,6 +603,7 @@ sub calendar {
 				else { $days .= "<td class='dat' height='$height%'></td>"; }
 			}
 			if ($flag) {
+				if ($price) { $total = $total + $price; }
 				$flag = 0;
 				$datetime = $datetime + 60*60*24;
 			}
@@ -578,10 +612,10 @@ sub calendar {
 	}
 	$days .= "</table";
 
-	my $year = $in{'year'};
-	my @temp = ();
-	my $mnth = $in{'month'}+1;
-	my $cnt = 6;
+	$year = $in{'year'};
+	@temp = ();
+	$mnth = $in{'month'}+1;
+	$cnt = 6;
 	foreach (1..6) {
 		$mnth--;
 		if ($mnth) {
@@ -638,7 +672,9 @@ sub calendar {
 		'public_cgi'	=> $conf{'public_cgi'},
 		'days'		=> $days,
 		'year'		=> $in{'year'},
-		'months'	=> $list_month
+		'months'	=> $list_month,
+		'month'		=> $months{$in{'month'}+1},
+		'total'		=> $total
 	);
 
 	&main(
@@ -715,10 +751,25 @@ sub get_price {
 	);
 }
 
+# sub get_domain_list {
+	# my ($domains, $count, %hash);
+	# $domains = shift;
+	# %hash = @_;
+
+	# $count = 0;
+	# foreach (@{$domains}) {
+		# if ($domains->{'date'} == $hash{'date'}) {
+			# $count++;
+		# }
+	# }
+	# return $count
+# }
+
 sub find_domains {
-	my ($html, $date,  $curtime, $collections, $search, @tmp);
+	my ($html, $date,  $curtime, $zone, $collections, $domains, $search, $price, @tmp);
 	$date = shift;
 	$collections = shift;
+	$domains = shift;
 
 	# Load template for one day
 	$html = &load_tempfile('file' => $tmpl{'one_day'});
@@ -727,27 +778,57 @@ sub find_domains {
 	@tmp = localtime($date);
 	# variable for check domain expires (current time + )
 	$curtime = timelocal(0, 0, 0, $tmp[3], $tmp[4], $tmp[5]);
-	$curtime = $curtime + 60*60*24-1;
+	$curtime = $curtime + 60*60*24;
 
 	# Create request to find all domains for current date
 	if ($tmp[3] < 10) { $tmp[3] = "0".$tmp[3]; }
 	$tmp[4]++;
 	$search = $tmp[4].$tmp[3];
-	if ($tmp[4] < 10) { $search = "0".$search; }
+#	if ($tmp[4] < 10) { $search = "0".$search; }
 
 	@tmp = ();
-	$tmp[0] = $collections->find( { 'date' => $search } )->count;
+	$tmp[0] = $tmp[1] = $tmp[2] = $tmp[3] = $price = 0;
+	map {
+		$zone = '';
+		if ($_->{'date'} == $search) {
+			$zone = $_->{'name'};
+			$zone =~ s/^.*?\.//;
+			$price = $price + $$collections{$zone};
+			$tmp[0]++;
+			# Hold domains
+			if ($_->{'status'}[0] =~ /hold/i) {
+				$tmp[3]++;
+			}
+			else {
+				# Extended domains
+				if (($_->{'expires'} > $curtime)&&($_->{'expires'} < ($curtime+60*60*24*365))) {
+					$tmp[1]++;
+				}
+				# expiring domains
+				else {
+					$tmp[2]++;
+				}
+			}
+		}
+	} (@{$domains});
 	if ($tmp[0]) {
-		# Extended domains
-		$tmp[1] = $collections->find( { 'date' => $search ,  'status.0' => {'$ne' => 'ServerHold'}, 'expires' => { '$gt' => $curtime, '$lt' => ($curtime+60*60*24*367) } } ) ->count;
-		# expiring domains
-		$tmp[2] = $collections->find( { 'date' => $search ,  'status.0' => {'$ne' => 'ServerHold'}, 'expires' => { '$lt' => $curtime } } ) ->count;
-		# Hold domains
-		$tmp[3] = $collections->find( { 'date' => $search ,  'status.0' => qr/hold/i } ) -> count;
-
 		# Fotmat output
-		map { unless ($_) { $_ = " $_"; } } (@tmp);
+		map { unless ($_) { $_ = ' 0'; } } (@tmp);
 
+		if ($tmp[3] =~ / 0/) { $tmp[4] = 'Hold'; }
+		else {
+			$tmp[4] = &create_command("Hold",
+				'list_domains'	=> 1,
+				'type_list'	=> 'hold',
+				'class'		=> 'expiring',
+				'tag'		=> 'span',
+				'login'		=> $in{'login'},
+				'session'	=> $in{'session'},
+				'date'		=> $search,
+				'time'		=> $date
+			);
+		}
+		
 		$html = &small_parsing(
 			$html,
 			'txt_expiring'=> &create_command("Expiring",
@@ -780,17 +861,20 @@ sub find_domains {
 						'date'		=> $search,
 						'time'		=> $date
 					),
-
+			'txt_price'	=> 'Price',
+			'txt_hold'	=> $tmp[4],
+			'hold'		=> $tmp[3],
 			'all'		=> $tmp[0],
 			'extended'	=> $tmp[1],
-			'expiring'	=> $tmp[2]
+			'expiring'	=> $tmp[2],
+			'price'		=> $price
 		);
 	}
 	else {
 		$html = ' ';
 	}
 
-	return $html;
+	return $html, $price;
 }
 
 sub info_table {
@@ -1062,8 +1146,8 @@ sub list_contacts {
 						'domain_update'	=> 1,
 						'name'		=> $data[$_]->{'name'}
 					),
-			'transfert'	=> &create_command('Transfert',
-						'domain_transfert'=> 1,
+			'transfer'	=> &create_command('transfer',
+						'domain_transfer'=> 1,
 						'name'		=> $data[$_]->{'name'}
 					),
 			'delete'	=> &create_command('Delete',
@@ -1133,7 +1217,7 @@ sub list_log {
 }
 
 sub list_messages {
-	my ($collections, $html, $list, $raw, $class, $path, $count, @data, @tmp);
+	my ($collections, $html, $list, $raw, $class, $path, $count, $htm, @data, @tmp);
 	$collections = shift;
 
 	@data = $collections->find( {} )->sort( { 'message_id' => -1 } )->all;
@@ -1198,12 +1282,14 @@ sub list_messages {
 }
 
 sub list_domains {
-	my ($html, $raw, $list, $collections, $class, $path, @tmp, @data, %comm);
+	my ($html, $htm, $raw, $count, $list, $collections, $price, $class, $path, $zone, $total, @pric, @tmp, @data, %comm, %price);
 	$collections = shift;
+	$price = shift;
 
 	# Read list of domains
 	if (($in{'type_list'} eq 'all') && ($in{'date'})) {
 		@data = $collections->find( { 'date' => $in{'date'} } )->sort( {'name' => 1} )->all;
+print $in{'date'};
 		$path = $mesg{'list_domains_all'}.&sec2date($in{'time'},'.');
 	}
 	elsif (($in{'type_list'} eq 'extended') && ($in{'date'})) {
@@ -1223,55 +1309,76 @@ sub list_domains {
 		$path = $mesg{'list_domains'};
 	}
 	else {
-		@data = $collections->find->sort( {'name' => 1} )->all;
+		@data = $collections->find()->sort( {'name' => 1} )->all;
 		$path = $mesg{'list_domains'};
 	}
+
+	# Get price
+	@pric = $price->find()->all;
+	map { $price{$_->{'zone'}} = $_->{'price'}[2]; } (@pric);
+	@pric = ();
 
 	# Read templates
 	$html = &load_tempfile('file' => $tmpl{'list_domains'});
 	$raw = &load_tempfile('file' => $tmpl{'domain_line'});
+	$htm = &load_tempfile('file' => $tmpl{'total'});
 	$class = '';
-
-	foreach (0..(scalar(@data) - 1)) {
+	$total = 0;
+	foreach $count (0..(scalar(@data) - 1)) {
+		$zone = $data[$count]->{'name'};
+		$zone =~ s/^.*?\.//;
+		$total += $price{$zone};
 		%comm = (
-			'info'		=> "<li><a href='#modalopen' onClick=\"javascript:open_frame('$conf{'public_cgi'}?domain_info=1&frame=1&name=".$data[$_]->{'name'}."');\" class='text $data[$_]->{'type'}'>info</a></li>",
-			'auth'		=> "<li><a href='#modalopen' onClick=\"javascript:open_frame('$conf{'public_cgi'}?domain_auth=1&frame=1&name=".$data[$_]->{'name'}."');\" class='text $data[$_]->{'type'}'>GetAuth</a></li>",
-			'suspend'	=> &create_command('Suspend',
+			'info'		=> "<li><a href='#modalopen' onClick=\"javascript:open_frame('$conf{'public_cgi'}?domain_info=1&frame=1&name=".$data[$count]->{'name'}."');\" class='text $data[$count]->{'type'}'>info</a></li>",
+			'auth'		=> "<li><a href='#modalopen' onClick=\"javascript:open_frame('$conf{'public_cgi'}?domain_auth=1&frame=1&name=".$data[$count]->{'name'}."');\" class='text $data[$count]->{'type'}'>GetAuth</a></li>",
+			'suspend'	=> &create_command('Susp',
 						'domain_suspend'=> 1,
-						'name'		=> $data[$_]->{'name'}
+						'name'		=> $data[$count]->{'name'},
+						'class'		=> "text ".$data[$count]->{'type'}
 					),
 			'renew'		=> &create_command('Renew',
 						'domain_renew'	=> 1,
-						'name'		=> $data[$_]->{'name'}
+						'name'		=> $data[$count]->{'name'},
+						'class'		=> "text ".$data[$count]->{'type'}
 					),
-			'log'		=> "<li><a href='#modalopen' onClick=\"javascript:open_frame('$conf{'public_cgi'}?domain_log=1&frame=1&name=".$data[$_]->{'name'}."');\" class='text $data[$_]->{'type'}'>Log</a></li>",
-			'delete'	=> &create_command('Delete',
+			'log'		=> "<li><a href='#modalopen' onClick=\"javascript:open_frame('$conf{'public_cgi'}?domain_log=1&frame=1&name=".$data[$count]->{'name'}."');\" class='text $data[$count]->{'type'}'>Log</a></li>",
+			'delete'	=> &create_command('Del',
 						'domain_delete'	=> 1,
-						'name'		=> $data[$_]->{'name'}
+						'name'		=> $data[$count]->{'name'},
+						'class'		=> "text ".$data[$count]->{'type'}
 					),
-			'status'	=> $data[$_]->{'status'}[0],
-			'admin'		=> $data[$_]->{'contacts'}->{'admin'}
+			'status'	=> $data[$count]->{'status'}[0],
 		);
 
+		if (exists $data[$count]->{'contacts'}->{'admin'}) {
+			$comm{'admin'} = $data[$count]->{'contacts'}->{'admin'};
+		}
+		else {
+			$comm{'admin'} = ' ';
+		}
+
 		# Convert date from sec to europe format
-		if ($data[$_]->{'expires'}) {
-			$data[$_]->{'expires'} = &sec2date($data[$_]->{'expires'});
+		if ($data[$count]->{'expires'}) {
+			$data[$count]->{'expires'} = &sec2date($data[$count]->{'expires'}, '.');
 		}
 		$list .= &small_parsing(
 			$raw,
 			'public_cgi'	=> $conf{'public_cgi'},
-			'name'	=> $data[$_]->{'name'},
-			'class'	=> $class,
-			'expires'	=> $data[$_]->{'expires'},
+			'name'		=> $data[$count]->{'name'},
+			'price'		=> $price{$zone},
+			'clas'		=> "text ".$data[$count]->{'type'},
+			'class'		=> $class,
+			'expires'	=> $data[$count]->{'expires'},
 			%comm
 		);
 		unless ($class) { $class = 'lineh'; }
 		else { $class = ''; }
 	}
+	$list .= &small_parsing( $htm, 'total' => $total );
 
 	$html = &small_parsing(
 		$html,
-		'public_cgi'		=> $conf{'public_cgi'},
+		'public_cgi'	=> $conf{'public_cgi'},
 		'list_domains'	=> $list
 	);
 

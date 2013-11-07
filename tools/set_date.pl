@@ -23,7 +23,9 @@ foreach $key (@tmp) {
 	# Compare exists & needed fields
 	print "$key->{'date'} $key->{'expires'} $key->{'exDate'} $key->{'name'} \n";
 
-	$collections->update( { '_id' => $key->{'_id'} }, { '$set' => { 'type' => 'updating' } });
+	$key->{'date'} =~ s/^0//;
+	$collections->update( { '_id' => $key->{'_id'} }, { '$set' => { 'date' => $key->{'date'} } });
+	# $collections->update( { '_id' => $key->{'_id'} }, { '$set' => { 'type' => 'updating' } });
 
 	# foreach (keys %{$not_exists} ) {
 		# if (/^date$/) {
