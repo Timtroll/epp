@@ -1545,7 +1545,7 @@ exit;
 }
 
 sub query_contact {
-	my ($collections, $mess, $data, $out, $html, @tmp);
+	my ($collections, $mess, $data, $out, $html, $comm, @tmp);
 	$collections = shift;
 
 	# check domain in the base
@@ -1575,6 +1575,8 @@ sub query_contact {
 	}
 	
 	$out = &info_table($data, 'edit');
+	$comm = &create_command_list(\%commands);
+	$out .= $comm;
 
 	$html = &load_tempfile('file' => $tmpl{'contact_form'});
 

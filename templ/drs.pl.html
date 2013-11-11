@@ -1,0 +1,305 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<!-- saved from url=(0027)http://localhost/epp/drs.pl -->
+<html xmlns="http://www.w3.org/1999/xhtml"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+
+<title></title>
+<link href="http://localhost/epp/css/style.css" rel="stylesheet" type="text/css">
+<link href="http://localhost/epp/css/bowl.css" rel="stylesheet" type="text/css">
+<style>
+html, body {
+	width: 100%;
+	height: 100%; 
+	font-family: Verdana, Arial, Helvetica, sans-serif;
+	font-size: 14px;
+	margin: 0;
+	padding: 0;
+}
+th {
+	height: 30px;
+	width: 2%;
+	text-align: center;
+	font-size: 12px;
+	font-style: normal;
+	font-family: Verdana, Arial, Helvetica, sans-serif;
+}
+.modal {
+	background-image: url('http://localhost/epp/css/spiner.gif');
+	background-position: center;
+	background-repeat: no-repeat;
+}
+.mailframe {
+	width: 24px;
+	height: 24px;
+	border: 0; 
+	display: block;
+	background-color: #ffffff;
+}
+.style1 {font-style: italic}
+</style>
+
+<script src="http://localhost/epp/css/domain_info.js"></script>
+<script>
+function reloadIt() {
+	document.getElementById("mymail").src='http://localhost/epp/check_mail.pl';
+}
+function reloadItT() {
+	document.getElementById("mymail").src='http://localhost/epp/check_transfer.pl';
+}
+</script>
+</head>
+<body>
+<table width="1005" height="100%" border="0" align="center" cellpadding="2" cellspacing="2" style="height:100%">
+  <tbody><tr>
+    <td height="1%">
+	 <table width="100%" border="0" align="center">
+      <tbody><tr>
+       <td width="40" align="left" valign="middle"><div class="pref" onclick="javascript:void(0);" tabindex="1"><div class="line"></div><div class="line"></div><div class="line"></div></div>
+   <div class="smenu">
+    <form action="http://localhost/epp/drs.pl.html" id="menu_form" method="post"><li onclick="javascript:PostData(this, &#39;menu_form&#39;, &#39;list_messages&#39;);">Сообщения</li><li onclick="javascript:PostData(this, &#39;menu_form&#39;, &#39;list_transfer&#39;);">Трансферы</li><hr><li onclick="javascript:PostData(this, &#39;menu_form&#39;, &#39;calendar&#39;);">Календарь</li><li onclick="javascript:PostData(this, &#39;menu_form&#39;, &#39;list_domains&#39;);">Список всех доменов</li><li onclick="javascript:PostData(this, &#39;menu_form&#39;, &#39;list_waiting&#39;);">Список непродленных доменов</li><li onclick="javascript:PostData(this, &#39;menu_form&#39;, &#39;list_ending&#39;);">Список просроченных доменов</li><li onclick="javascript:PostData(this, &#39;menu_form&#39;, &#39;list_contacts&#39;);">Список всех контактов</li><li onclick="javascript:PostData(this, &#39;menu_form&#39;, &#39;price&#39;);">Доменные зоны (Price)</li><hr><li onclick="javascript:PostData(this, &#39;menu_form&#39;, &#39;adv_search&#39;);">Расширенный поиск</li><hr><li onclick="javascript:PostData(this, &#39;menu_form&#39;, &#39;get_price&#39;);">Обновление себестоимости (Price)</li><li onclick="javascript:PostData(this, &#39;menu_form&#39;, &#39;pref&#39;);">Настройки</li></form>
+   </div>
+</td>
+       <td width="40" align="center" valign="top">
+       <form action="http://localhost/epp/drs.pl.html" id="transfer_form" method="post">
+       <div id="bowl" class="bowl-hide">
+         <div id="bowlG" class="bowlG" onclick="javascript:PostData(this, &#39;transfer_form&#39;, &#39;list_messages&#39;);">
+           <div id="bowl_ringG" class="bowl_ringG">
+             <div id="bowl_txtT" class="bowl_txtT">T</div>
+             <div id="ball_holderG" class="ball_holderG">
+               <div id="ballG" class="ballG"></div>
+             </div>
+           </div>
+         </div>
+       </div>
+       </form>
+       </td>
+	<td>
+	 <table width="100%" border="0" align="center">
+	  <form action="http://localhost/epp/drs.pl.html" method="post"></form>
+	  
+       <tbody><tr><td width="160" align="center" valign="middle">проверить домен</td>
+       <td width="320" valign="middle"><input type="text" name="name" value="" class="wdth"></td>
+       <td width="100" align="center" valign="middle"><input type="submit" name="query_domain" value="Submit"></td>
+ 	  </tr>
+	  
+	 </tbody></table>
+	</td><td>
+	 <table width="100%" border="0" align="center">
+	  <form action="http://localhost/epp/drs.pl.html" method="post"></form>
+	  <tbody><tr>
+       <td width="140" align="center" valign="middle">найти контакт</td>
+       <td width="147" valign="middle"><input type="text" name="contact" class="wdth" value=""></td>
+       <td width="80" align="right" valign="middle"><input type="submit" name="query_contact" value="Submit"></td>
+	  </tr>
+	  
+	 </tbody></table>
+	</td>
+
+       <td width="30" align="right" valign="top">
+       <form action="http://localhost/epp/drs.pl.html" id="message_form" method="post">
+         <div id="bowlPoll" class="bowl-hide">
+           <div id="bowlGPoll" class="bowlG" onclick="javascript:PostData(this, &#39;message_form&#39;, &#39;list_messages&#39;);">
+             <div id="bowl_ringGPoll" class="bowl_ringG">
+               <div id="bowl_txtPoll" class="bowl_txt">@</div>
+               <div id="ball_holderGPoll" class="ball_holderG">
+                 <div id="ballGPoll" class="ballG"></div>
+               </div>
+             </div>
+           </div>
+         </div>
+       </form>
+       </td>
+       <td width="40" align="right" valign="middle"><a href="http://localhost/epp/drs.pl#" onclick="javascript:document.location.href=&#39;http://localhost/epp/drs.pl?logout=1&#39;;"><img src="http://localhost/epp/css/logout.png" width="24" height="24" align="right" class="logout"></a></td>
+	  </tr>
+	 </tbody></table>
+  </td>
+  </tr>
+  <tr>
+    <td height="1"><div class="message" id="message"></div></td>
+  </tr>
+  <tr>
+    <td valign="top"><script language="JavaScript" src="http://localhost/epp/country.js" type="text/javascript"></script>
+<table width="100%" border="0" cellpadding="2" cellspacing="2" onclick="javascript:CloseCon();">
+  <tbody><tr>
+    <td width="60%" align="left" valign="top"><span class="style1">В <strong>Ноябре</strong>
+ закончится срок делегирования:</span>
+      <table width="100%" border="0" cellspacing="2" cellpadding="2">
+        <tr>
+          <td>&nbsp;</td>
+          <td width="20%" align="center">осталось</td>
+          <td width="20%" align="center">цена</td>
+        </tr>
+        <tr>
+          <td>sdfsdfs.com.ua</td>
+          <td width="20%" align="center"> 4 дня </td>
+          <td width="20%" align="center"> 28 грн </td>
+        </tr>
+        <tr>
+          <td>sdfsdfs.com.ua</td>
+          <td width="20%" align="center"> 5 дня </td>
+          <td width="20%" align="center">28 грн </td>
+        </tr>
+        <tr>
+          <td>sdfsdfs.com.ua</td>
+          <td width="20%" align="center"> 12 дня </td>
+          <td width="20%" align="center">28 грн </td>
+        </tr>
+        <tr>
+          <td>sdfsdfs.com.ua</td>
+          <td width="20%" align="center"> 12 дня </td>
+          <td width="20%" align="center">28 грн </td>
+        </tr>
+        <tr>
+          <td>sdfsdfs.com.ua</td>
+          <td width="20%" align="center"> 13 дня </td>
+          <td width="20%" align="center">28 грн </td>
+        </tr>
+        <tr>
+          <td>sdfsdfs.com.ua</td>
+          <td width="20%" align="center"> 23 дня </td>
+          <td width="20%" align="center">28 грн </td>
+        </tr>
+        <tr>
+          <td>&nbsp;</td>
+          <td align="center">&nbsp;</td>
+          <td align="center"><strong>234</strong> грн </td>
+        </tr>
+      </table>
+      <br />
+      Срок делегирования закончился <strong></strong>
+      <table width="100%" border="0" cellspacing="2" cellpadding="2">
+        <tr>
+          <td>&nbsp;</td>
+          <td width="20%" align="center">просрочено</td>
+          <td width="20%" align="center">цена</td>
+        </tr>
+        <tr>
+          <td>sdfsdfs.com.ua</td>
+          <td width="20%" align="center"> 4 дня </td>
+          <td width="20%" align="center"> 28 грн </td>
+        </tr>
+        <tr>
+          <td>sdfsdfs.com.ua</td>
+          <td width="20%" align="center"> 5 дня </td>
+          <td width="20%" align="center">28 грн </td>
+        </tr>
+        <tr>
+          <td>sdfsdfs.com.ua</td>
+          <td width="20%" align="center"> 12 дня </td>
+          <td width="20%" align="center">28 грн </td>
+        </tr>
+        <tr>
+          <td>sdfsdfs.com.ua</td>
+          <td width="20%" align="center"> 12 дня </td>
+          <td width="20%" align="center">28 грн </td>
+        </tr>
+        <tr>
+          <td>sdfsdfs.com.ua</td>
+          <td width="20%" align="center"> 13 дня </td>
+          <td width="20%" align="center">28 грн </td>
+        </tr>
+        <tr>
+          <td>sdfsdfs.com.ua</td>
+          <td width="20%" align="center"> 23 дня </td>
+          <td width="20%" align="center">28 грн </td>
+        </tr>
+        <tr>
+          <td>&nbsp;</td>
+          <td align="center">&nbsp;</td>
+          <td align="center"><strong>234</strong> грн </td>
+        </tr>
+      </table></td>
+    <td width="40%" valign="top"><table width="100%" border="0" cellspacing="2" cellpadding="2">
+      <tr>
+        <td>Баланс</td>
+        <td width="30%" align="right"><strong>2800</strong> грн </td>
+      </tr>
+      <tr>
+        <td>&nbsp;</td>
+        <td align="right">&nbsp;</td>
+      </tr>
+      <tr>
+        <td><em>Затраты в <strong>Ноябре</strong></em></td>
+        <td align="right">&nbsp;</td>
+      </tr>
+      <tr>
+        <td>Продление доменов </td>
+        <td align="right"><strong>~3333</strong> грн</td>
+      </tr>
+      <tr>
+        <td>Дополнительные услуги </td>
+        <td align="right">123 грн </td>
+      </tr>
+      <tr>
+        <td>&nbsp;</td>
+        <td align="right">&nbsp;</td>
+      </tr>
+      <tr>
+        <td>&nbsp;</td>
+        <td align="right">&nbsp;</td>
+      </tr>
+      <tr>
+        <td><em>Домены</em></td>
+        <td align="right">&nbsp;</td>
+      </tr>
+      <tr>
+        <td>.com</td>
+        <td align="right">12</td>
+      </tr>
+      <tr>
+        <td>.kiev.ua</td>
+        <td align="right">42</td>
+      </tr>
+      <tr>
+        <td><strong>всего</strong></td>
+        <td align="right">54</td>
+      </tr>
+    </table><br>
+      <em>Финансы</em>:
+      <table width="100%" border="0" cellspacing="2" cellpadding="2">
+        <tr>
+          <td>Выписанные счета</td>
+        </tr>
+
+        <tr>
+          <td>История платежей</td>
+        </tr>
+      </table>
+<br />
+<em>Документы</em>:
+<table width="100%" border="0" cellspacing="2" cellpadding="2">
+  <tr>
+    <td>Договор о регистрации домена</td>
+  </tr>
+  <tr>
+    <td>Договор о предоставлении дополнительных услуг</td>
+  </tr>
+  <tr>
+    <td>Регистрационные документы</td>
+  </tr>
+</table></td>
+  </tr>
+ </tbody>
+</table><br />
+
+Пополнить баланс:
+<table width="100%" border="0" cellspacing="2" cellpadding="2">
+  <tr>
+    <td width="25%" align="left"><img src="http://localhost/epp/css/pb1.gif" width="200" /></td>
+    <td width="25%" align="center"><img src="http://localhost/epp/css/wm1.png" width="200" /></td>
+    <td width="25%" align="center">&nbsp;</td>
+    <td width="25%" align="right">&nbsp;</td>
+  </tr>
+</table></td>
+  </tr>
+</tbody></table>
+<div id="modalopen" class="win">
+  <div id="int">
+    <a href="http://localhost/epp/drs.pl#close" title="Закрыть" class="close">X</a>
+    <span id="modalframe"></span>  </div>
+</div>
+<div id="command_fields" style="display:none;"></div>
+<iframe onload="javascript: setTimeout(&#39;reloadIt()&#39;,300000);" name="mymail" id="mymail" style="display:none;" src="http://localhost/epp/check_mail.html"></iframe>
+<iframe onload="javascript: setTimeout(&#39;reloadItT()&#39;,300000);" name="Tmymail" id="Tmymail" style="display:none;" src="http://localhost/epp/check_transfer.html"></iframe>
+ 
+
+</body></html>
