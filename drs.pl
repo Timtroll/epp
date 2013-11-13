@@ -22,7 +22,7 @@ BEGIN {
 	$ENV{PERL_LWP_SSL_VERIFY_HOSTNAME} = '0';
 };
 
-our (%conf, %collection, %months, %week, %in, %tmpl, %mesg, %domain_mail, %command_epp, %commands, %menu_line, %statuses, %disabled);
+our (%conf, %collection, %months, %week, %in, %tmpl, %mesg, %domain_mail, %command_epp, %commands, %commandsc, %menu_line, %statuses, %disabled);
 our (@week, @sceleton);
 our ($domain_sceleton, $domain_info);
 
@@ -60,7 +60,69 @@ elsif ($in{'domain_renew'})	{ &domain_renew(&connect($conf{'database'}, $collect
 elsif ($in{'domain_transfer'})	{ &domain_transfer(&connect($conf{'database'}, $collection{'domains'})); }
 elsif ($in{'domain_auth'})	{ &domain_auth(&connect($conf{'database'}, $collection{'domains'})); }
 elsif ($in{'domain_log'})	{ &domain_log(&connect($conf{'database'}, $collection{'log_actions'})); }
+elsif ($in{'contact_save'})	{ &contact_save(&connect($conf{'database'}, $collection{'users'})); }
+elsif ($in{'contact_update'})	{ &contact_update(&connect($conf{'database'}, $collection{'users'})); }
 else				{ &main('title' => 'Стартовая'); }
+
+sub prepare_epp_data_contact {
+	my ($inepp, $tmp, $key, $cnt, @add, @rem, @addstat, @remstat, %tmp, %ns);
+	$inepp = shift;
+
+	$domain_sceleton -> {'id'} = $in{'id'};
+	$domain_sceleton -> {'chg'} -> {'authInfo'} = &create_rnd(11);
+print Dumper($inepp);
+	# Read 'street' fields
+	if (param('street_count')) {
+		$key = param('street_count');
+		for ($cnt = 0; $cnt < $key; $cnt++) {
+			$tmp = param('street_'.$cnt);
+			$ns{$tmp} = 1 if $tmp;
+		}
+	}
+	# Create chg 'street'
+	foreach (keys %ns) {
+		unless (exists $tmp{$_} || (/^ok$/i)) { push @addstat, $_; }
+	}
+	$domain_sceleton -> {'chg'} -> {'postalInfo'} -> {'loc'} -> {'addr'} -> {'street'} = \@addstat if scalar(@addstat);
+
+	# # Convert status array to hash
+	# %tmp = (); %ns = ();
+	# map { $tmp{$_} = 1; } (@{$inepp->{'status'}});
+
+	# # Read 'status' fields
+	# if (param('status_count')) {
+		# $key = param('status_count');
+		# for ($cnt = 0; $cnt < $key; $cnt++) {
+			# $tmp = param('status_'.$cnt);
+			# $ns{$tmp} = 1 if $tmp;
+		# }
+	# }
+	# # Create add 'status'
+	# foreach (keys %ns) {
+		# unless (exists $tmp{$_} || (/^ok$/i)) { push @addstat, $_; }
+	# }
+	# # Create rem 'status'
+	# foreach (keys %tmp) {
+		# unless ((exists $ns{$_}) || (/^ok$/i)) { push @remstat, $_; }
+	# }
+	# $domain_sceleton -> {'add'} -> {'status'} = \@addstat if scalar(@addstat);
+	# $domain_sceleton -> {'rem'} -> {'status'} = \@remstat if scalar(@remstat);
+
+	# Print to object fields for Update
+	$domain_sceleton -> {'chg'} -> {'postalInfo'} -> {'loc'} -> {'org'} = $in{'loc_org'};
+	$domain_sceleton -> {'chg'} -> {'postalInfo'} -> {'loc'} -> {'name'} = $in{'loc_name'};
+	$domain_sceleton -> {'chg'} -> {'postalInfo'} -> {'loc'} -> {'addr'} -> {'sp'} = $in{'addr_sp'};
+	$domain_sceleton -> {'chg'} -> {'postalInfo'} -> {'loc'} -> {'addr'} -> {'city'} = $in{'addr_city'};
+	$domain_sceleton -> {'chg'} -> {'postalInfo'} -> {'loc'} -> {'addr'} -> {'cc'} = $in{'addr_cc'};
+	$domain_sceleton -> {'chg'} -> {'postalInfo'} -> {'loc'} -> {'addr'} -> {'pc'} = $in{'addr_pc'};
+	$domain_sceleton -> {'chg'} -> {'postalInfo'} -> {'loc'} -> {'addr'} -> {'pc'} = $in{'addr_pc'};
+	$domain_sceleton -> {'chg'} -> {'voice'} = $in{'voice'};
+	$domain_sceleton -> {'chg'} -> {'fax'} = $in{'fax'};
+	$domain_sceleton -> {'chg'} -> {'email'} = $in{'email'};
+print Dumper($domain_sceleton);
+
+	return;
+}
 
 sub prepare_epp_data {
 	my ($inepp, $tmp, $key, $cnt, @add, @rem, @addstat, @remstat, %tmp, %ns);
@@ -139,6 +201,96 @@ sub prepare_epp_data {
 	}
 
 	return;
+}
+
+sub contact_update {
+	my ($html, $info, $mess, $collections, $epp, $update, @tmp, @temp, @ns, %tmp, %out);
+	$collections = shift;
+
+	# Find and Update domain status to 'updating' in the base
+	@temp = $collections->find( { 'id' => $in{'id'} } )->all;
+	unless (scalar(@temp)) {
+		$out{'messages'} .= "В базе нет записи о контакте $in{'id'}";
+	}
+	if (scalar(@temp) > 1) {
+		$out{'messages'} .= "В базе несколько записей о контакте $in{'id'}";
+	}
+
+	# check domain & get donain info
+	($info, $mess) = &chck_contact();
+
+	# Prepare params data for sending
+	&prepare_epp_data_contact($info);
+
+	# Send create domain request
+	$epp = &connect_epp();
+
+	# Update domain by EPP
+	$epp->update_contact($domain_sceleton);
+
+	# log action
+	&action_log($in{'id'}, 'contact_update', $domain_sceleton, join("\n", ($Net::EPP::Simple::Error, $Net::EPP::Simple::Code, $Net::EPP::Simple::Message)));
+
+	# check response errors
+	&check_response('', 2001, 2005, 2201, 2303, 2304);
+
+	# Store new domain
+	if (($Net::EPP::Simple::Code == 1000)||($Net::EPP::Simple::Code == 1001)) {
+		# Find and Update domain status to 'updating' in the base
+		@temp = $collections->find( { 'id' => $in{'id'} } )->all;
+		if (scalar(@temp) == 1) {
+			foreach $html (keys %{$temp[0]}) {
+				if ($html =~ /^contacts$/) {
+					%tmp = ();
+					foreach ('admin', 'tech', 'billing') {
+						$tmp{$_} = param('contacts_'.$_) if param('contacts_'.$_);
+					}
+					$update->{$html} = {%tmp} if scalar(keys %tmp);
+				}
+				elsif (($html =~ /^(status)$/)||($html =~ /^(ns)$/)) {
+					@tmp = ();
+					foreach (0..param($html.'_count')) {
+						if (param($html.'_'.$_)) {
+							push @tmp, param($html.'_'.$_) if (param($1.'_'.$_) ne 'ok');
+						}
+					}
+					$update->{$html} = [@tmp] if scalar(@tmp);
+				}
+				else {
+					$update->{$html} = param($html) if param($html);
+				}
+			}
+			foreach (keys %{$domain_sceleton->{'chg'}}) {
+				$update->{$_} = $domain_sceleton->{'chg'}->{$_} if $domain_sceleton->{'chg'}->{$_};
+			}
+			$update->{'type'} = 'updating';
+			$update->{'upID'} = $conf{'epp_user'};
+print Dumper($update);
+#			$collections->update( { '_id' => $temp[0]->{'_id'}}, { '$set' => $update } );
+		}
+		else {
+			$out{'messages'} .= "В базе несколько записей о контокте $in{'id'}";
+		}
+	}
+
+	# Send create domain request
+	$out{'info'} = &info_table($domain_sceleton);
+
+	# Load mail frame template
+	$html = &load_tempfile('file' => $tmpl{'frame'});
+
+	$out{'title'} = "<div class='title'>UPDATE контакта $in{'id'}</div>";
+	$out{'messages'} .= $Net::EPP::Simple::Error.' '.$Net::EPP::Simple::Code.' '.$Net::EPP::Simple::Message;
+	print &small_parsing(
+		$html,
+		'public_cgi'	=> $conf{'public_cgi'},
+		'public_css'	=> $conf{'public_css'},
+		'public_url'	=> $conf{'public_url'},
+		%out
+	);
+
+	$html = '';
+	exit;
 }
 
 sub domain_update {
@@ -320,6 +472,55 @@ sub domain_auth {
 	exit;
 }
 
+sub contact_save {
+	my ($collections, $epp, $info, $tmp, $html);
+	$collections = shift;
+
+	# Send create domain request
+	$epp = &connect_epp();
+
+	# get information about new domain
+	$info = $epp->contact_info($in{'contact'});
+
+	# check response errors
+	&check_response($info, 2001);
+
+	if ($Net::EPP::Simple::Code == 1000) {
+		# Convert response to UTF8
+		$info = &obj2utf($info);
+
+# print $in{'contact'}, "<br>", $Net::EPP::Simple::Code;
+# print Dumper($info);
+# exit;
+		# Add required fields
+		delete $info->{'response'};
+		$info->{'type'} = 'admin';
+		$info->{'discount'} = '2';
+
+		# Find domain in database
+		$tmp = $collections->find({'id' => $in{'contact'}})->count;
+
+		# Add new domain to database if it not exists or udate it
+		unless ($tmp) {
+			$collections->insert( $info );
+		}
+		elsif ($tmp == 1) {
+			$collections->update( $info );
+		}
+		else {
+			$in{'messages'} .= "Есть дубликаты контакта $in{'contact'}";
+		}
+		
+		$html = &info_table($info);
+		$in{'messages'} .= 'Контакт успешно добавлен в базу';
+	}
+	$epp = '';
+
+	&main(
+		'content'	=> $html
+	);
+}
+
 sub domain_save {
 	my ($collections, $epp, $info, $tmp, $html);
 	$collections = shift;
@@ -492,6 +693,67 @@ sub domain_create {
 
 	# Create new domain
 	$info = $epp->create_domain($domain_sceleton);
+	
+	# log action
+	&action_log($in{'name'}, 'domain_create', $domain_sceleton, join("\n", ($Net::EPP::Simple::Error, $Net::EPP::Simple::Code, $Net::EPP::Simple::Message)));
+
+	# check response errors
+	&check_response('', 2001, 2003, 2004, 2005, 2201, 2302, 2303, 2307,  2309);
+
+	# Store new domain to request queue
+	if (($Net::EPP::Simple::Code == 1000)||($Net::EPP::Simple::Code == 1001)) {
+		$domain_sceleton->{'date'} = (&sec2date(time(), 'md'));
+		$domain_sceleton->{'expires'} = (time()+60*60*24*365);
+		$domain_sceleton->{'exDate'} = (&sec2date(time(), 'iso'));
+		$domain_sceleton->{'type'} = 'creating';
+		$collections->insert( $domain_sceleton );
+
+		$in{'messages'} = "Запрос на добавление домена $in{'name'} добавлен в очередь";
+	}
+	else {
+		$in{'messages'} = $Net::EPP::Simple::Code.$Net::EPP::Simple::Message;
+	}
+	$epp = '';
+
+	&main(
+		'content'	=> $html
+	);
+}
+
+sub contact_create {
+	my ($collections, $epp, $info, $tmp, $html, @ns, @status);
+	$collections = shift;
+
+	# Prerare request obect
+	$domain_sceleton = {
+			'name'		=> $in{'name'},
+			'period'	=> $in{'period'},
+			'registrant'	=> $in{'registrant'},
+			'authInfo'	=> &create_rnd(10),
+			'contacts'	=> {
+				'tech'		=> $in{'contacts_tech'},
+				'billing'	=> $in{'contacts_billing'},
+				'admin'		=> $in{'contacts_admin'}
+			}
+	};
+	foreach (keys %in) {
+		if (/^ns/) { push @ns, $in{$_}; }
+		elsif (/^status/) { push @status, $in{$_}; }
+	}
+	$domain_sceleton->{'ns'} = \@ns;
+	$domain_sceleton->{'status'} = \@status;
+	if (($in{'name'} =~ /^(\w|\-)+\.com\.ua$/)||($in{'name'} =~ /^(\w|\-)+\.kiev\.ua$/)) {
+		delete ($domain_sceleton->{'contacts'}->{'billing'});
+	}
+	if ($in{'name'} =~ /^(\w|\-)+\.ua$/) {
+		$domain_sceleton->{'license'} = $in{'license'};
+	}
+
+	# Send create domain request
+	$epp = &connect_epp();
+
+	# Create new domain
+	$info = $epp->create_contact($domain_sceleton);
 	
 	# log action
 	&action_log($in{'name'}, 'domain_create', $domain_sceleton, join("\n", ($Net::EPP::Simple::Error, $Net::EPP::Simple::Code, $Net::EPP::Simple::Message)));
@@ -1575,7 +1837,7 @@ sub query_contact {
 	}
 	
 	$out = &info_table($data, 'edit');
-	$comm = &create_command_list(\%commands);
+	$comm = &create_command_list(\%commandsc);
 	$out .= $comm;
 
 	$html = &load_tempfile('file' => $tmpl{'contact_form'});
@@ -1584,6 +1846,7 @@ sub query_contact {
 		$html,
 		'public_css'	=> $conf{'public_css'},
 		'public_cgi'	=> $conf{'public_cgi'},
+		'contact'	=> $in{'contact'},
 		'info'		=> $out
 	);
 
@@ -1782,6 +2045,7 @@ sub chck_contact {
 
 		# check contact
 		if ($Net::EPP::Simple::Code == 1000) {
+			delete $info->{'response'};
 			# Recode to UTF8
 			$info = &obj2utf($info);
 		}
