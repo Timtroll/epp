@@ -70,7 +70,7 @@ sub prepare_epp_data_contact {
 
 	$domain_sceleton -> {'id'} = $in{'id'};
 	$domain_sceleton -> {'chg'} -> {'authInfo'} = &create_rnd(11);
-print Dumper($inepp);
+
 	# Read 'street' fields
 	if (param('street_count')) {
 		$key = param('street_count');
@@ -85,29 +85,6 @@ print Dumper($inepp);
 	}
 	$domain_sceleton -> {'chg'} -> {'postalInfo'} -> {'loc'} -> {'addr'} -> {'street'} = \@addstat if scalar(@addstat);
 
-	# # Convert status array to hash
-	# %tmp = (); %ns = ();
-	# map { $tmp{$_} = 1; } (@{$inepp->{'status'}});
-
-	# # Read 'status' fields
-	# if (param('status_count')) {
-		# $key = param('status_count');
-		# for ($cnt = 0; $cnt < $key; $cnt++) {
-			# $tmp = param('status_'.$cnt);
-			# $ns{$tmp} = 1 if $tmp;
-		# }
-	# }
-	# # Create add 'status'
-	# foreach (keys %ns) {
-		# unless (exists $tmp{$_} || (/^ok$/i)) { push @addstat, $_; }
-	# }
-	# # Create rem 'status'
-	# foreach (keys %tmp) {
-		# unless ((exists $ns{$_}) || (/^ok$/i)) { push @remstat, $_; }
-	# }
-	# $domain_sceleton -> {'add'} -> {'status'} = \@addstat if scalar(@addstat);
-	# $domain_sceleton -> {'rem'} -> {'status'} = \@remstat if scalar(@remstat);
-
 	# Print to object fields for Update
 	$domain_sceleton -> {'chg'} -> {'postalInfo'} -> {'loc'} -> {'org'} = $in{'loc_org'};
 	$domain_sceleton -> {'chg'} -> {'postalInfo'} -> {'loc'} -> {'name'} = $in{'loc_name'};
@@ -119,7 +96,6 @@ print Dumper($inepp);
 	$domain_sceleton -> {'chg'} -> {'voice'} = $in{'voice'};
 	$domain_sceleton -> {'chg'} -> {'fax'} = $in{'fax'};
 	$domain_sceleton -> {'chg'} -> {'email'} = $in{'email'};
-print Dumper($domain_sceleton);
 
 	return;
 }
