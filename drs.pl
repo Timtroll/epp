@@ -334,7 +334,7 @@ sub domain_update {
 			$collections->update( { '_id' => $temp[0]->{'_id'}}, { '$set' => $update } );
 		}
 		else {
-			$out{'messages'} .= "В базе  несколько записей о домене $in{'name'}";
+			$out{'messages'} .= "В базе несколько записей о домене $in{'name'}";
 		}
 	}
 
