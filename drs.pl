@@ -40,18 +40,17 @@ $CGI::POST_MAX = 16384;
 
 &read_param();
 if ($in{'query_domain'})	{ &query_domain(&connect($conf{'database'}, $collection{'domains'})); }
-elsif ($in{'query_contact'})	{ &query_contact(&connect($conf{'database'}, $collection{'cantacts'})); }
+elsif ($in{'contact_edit'})	{ &contact_edit(&connect($conf{'database'}, $collection{'cantacts'})); }
 elsif ($in{'send_request'})	{ &send_request(&connect($conf{'database'}, $collection{'domains'})); }
 elsif ($in{'list_domains'})	{ &list_domains(&connect($conf{'database'}, $collection{'domains'}), &connect($conf{'database'}, $collection{'zones'})); }
 # elsif ($in{'list_waiting'})	{ $in{'type_list'} = 'waiting'; &list_domains(&connect($conf{'database'}, $collection{'domains'})); }
 # elsif ($in{'list_ending'})	{ $in{'type_list'} = 'ending'; &list_domains(&connect($conf{'database'}, $collection{'domains'})); }
 elsif ($in{'list_contacts'})	{ &list_contacts(&connect($conf{'database'}, $collection{'contacts'})); }
 elsif ($in{'list_messages'})	{ &list_messages(&connect($conf{'database'}, $collection{'messages'})); }
-elsif ($in{'list_transfer'})	{ &list_transfer(&connect($conf{'database'}, $collection{'messages'})); }
 elsif ($in{'domain_info'})	{ &domain_info(&connect($conf{'database'}, $collection{'domains'})); }
 elsif ($in{'calendar'})		{ &calendar(&connect($conf{'database'}, $collection{'domains'}), &connect($conf{'database'}, $collection{'zones'})); }
 elsif ($in{'price'})		{ &get_price(&connect($conf{'database'}, $collection{'zones'})); }
-elsif ($in{'get_price'})	{ &get_price(&connect($conf{'database'}, $collection{'zones'})); }
+elsif ($in{'get_price'})	{ &get_price(&connect($conf{'database'}, $collection{'zones'}), 1); }
 elsif ($in{'message_read'})	{ &message_read(&connect($conf{'database'}, $collection{'messages'})); }
 elsif ($in{'domain_create'})	{ &domain_create(&connect($conf{'database'}, $collection{'domains'})); }
 elsif ($in{'domain_save'})	{ &domain_save(&connect($conf{'database'}, $collection{'domains'})); }
@@ -60,8 +59,9 @@ elsif ($in{'domain_renew'})	{ &domain_renew(&connect($conf{'database'}, $collect
 elsif ($in{'domain_transfer'})	{ &domain_transfer(&connect($conf{'database'}, $collection{'domains'})); }
 elsif ($in{'domain_auth'})	{ &domain_auth(&connect($conf{'database'}, $collection{'domains'})); }
 elsif ($in{'domain_log'})	{ &domain_log(&connect($conf{'database'}, $collection{'log_actions'})); }
-elsif ($in{'contact_save'})	{ &contact_save(&connect($conf{'database'}, $collection{'users'})); }
-elsif ($in{'contact_update'})	{ &contact_update(&connect($conf{'database'}, $collection{'users'})); }
+elsif ($in{'contact_save'})	{ &contact_save(&connect($conf{'database'}, $collection{'contacts'})); }
+elsif ($in{'contact_update'})	{ &contact_update(&connect($conf{'database'}, $collection{'contacts'})); }
+elsif ($in{'contact_edit'})	{ &contact_edit(&connect($conf{'database'}, $collection{'contacts'})); }
 else				{ &main('title' => 'Стартовая'); }
 
 sub prepare_epp_data_contact {
@@ -911,7 +911,17 @@ sub calendar {
 		'days'		=> $days,
 		'year'		=> $in{'year'},
 		'months'	=> $list_month,
-		'month'		=> $months{$in{'month'}+1},
+		'month'		=> &create_command(
+			$months{$in{'month'}+1},
+			'list_domains'	=> 1,
+			'tag'		=> 'span',
+			'class'		=> '',
+			'login'		=> $in{'login'},
+			'session'	=> $in{'session'},
+			'type_list'	=> 'month',
+			'year'		=> $in{'year'},
+			'date'		=> &sec2date(timelocal( 0, 0, 0, 1, $in{'month'}, $in{'year'}), 'md')
+		),
 		'total'		=> $total
 	);
 
@@ -1358,8 +1368,11 @@ sub list_contacts {
 	my ($html, $raw, $list, $collections, $class, $path, @tmp, @data, %comm);
 	$collections = shift;
 
+# print Dumper($collections);
+# print scalar(@data);
+# print "<br>";
 	# Read list of contacts
-	@data = $collections->find->sort( {'name' => 1} )->all;
+	@data = $collections->find()->all; # ->sort( {'id' => 1} )
 	$path = $mesg{'list_domains'};
 
 	# Read templates
@@ -1367,29 +1380,19 @@ sub list_contacts {
 	$raw = &load_tempfile('file' => $tmpl{'domain_line'});
 	$class = '';
 #print timelocal(0, 0, 12, 8, 7, 2007);
-#print "<br>";
 
 	foreach (0..(scalar(@data) - 1)) {
 		%comm = (
-			'info'		=> "<li><a href='#modalopen' onClick=\"javascript:open_frame('$conf{'public_cgi'}?domain_info=1&name=".$data[$_]->{'name'}."');\" class='text'>info</a></li>",
+			'info'		=> &create_command('Edit',
+						'contact_edit'=> 1,
+						'name'		=> $data[$_]->{'name'}
+					),
 			'suspend'	=> &create_command('Suspend',
-						'domain_suspend'=> 1,
-						'name'		=> $data[$_]->{'name'}
-					),
-			'renew'		=> &create_command('Renew',
-						'domain_renew'	=> 1,
-						'name'		=> $data[$_]->{'name'}
-					),
-			'update'	=> &create_command('Modify',
-						'domain_update'	=> 1,
-						'name'		=> $data[$_]->{'name'}
-					),
-			'transfer'	=> &create_command('transfer',
-						'domain_transfer'=> 1,
+						'contact_suspend'=> 1,
 						'name'		=> $data[$_]->{'name'}
 					),
 			'delete'	=> &create_command('Delete',
-						'domain_delete'	=> 1,
+						'contact_delete'	=> 1,
 						'name'		=> $data[$_]->{'name'}
 					)
 		);
@@ -1401,7 +1404,8 @@ sub list_contacts {
 		$list .= &small_parsing(
 			$raw,
 			'public_cgi'	=> $conf{'public_cgi'},
-			'name'		=> &create_command($data[$_]->{'name'}, 'class' => 'dom'),
+#			'name'		=> &create_command($data[$_]->{'id'}, 'class' => 'dom'),
+			'name'		=> $data[$_]->{'id'},
 			'class'		=> $class,
 			'expires'	=> $data[$_]->{'expires'},
 			%comm
@@ -1527,8 +1531,13 @@ sub list_domains {
 	# Read list of domains
 	if (($in{'type_list'} eq 'all') && ($in{'date'})) {
 		@data = $collections->find( { 'date' => $in{'date'} } )->sort( {'name' => 1} )->all;
-print $in{'date'};
 		$path = $mesg{'list_domains_all'}.&sec2date($in{'time'},'.');
+	}
+	elsif (($in{'type_list'} eq 'month') && ($in{'date'})) {
+		$in{'date1'} = $in{'date'} + 31;
+		@data = $collections->find( { 'date' => { '$gte' => "$in{'date'}", '$lte' => "$in{'date1'}" } } )->sort( {'date' => 1} )->all;
+		$in{'date1'} =~ s/\d\d$//;
+		$path = $mesg{'list_domains_month'}.$months{$in{'date1'}};
 	}
 	elsif (($in{'type_list'} eq 'extended') && ($in{'date'})) {
 		@data = $collections->find( { 'date' => $in{'date'},  'status.0' => {'$ne' => 'ServerHold'}, 'expires' => { '$gt' => (&date2sec(&sec2date($in{'time'}, 'iso'))+60*60*24-1), '$lt' => (&date2sec(&sec2date($in{'time'}, 'iso'))+60*60*24*366-1),  } } )->sort( {'name' => 1} )->all;
@@ -1782,7 +1791,7 @@ exit;
 	);
 }
 
-sub query_contact {
+sub contact_edit {
 	my ($collections, $mess, $data, $out, $html, $comm, @tmp);
 	$collections = shift;
 
@@ -1792,7 +1801,7 @@ sub query_contact {
 		@tmp = $collections->find( { 'id' => $in{'contact'} } )->all;
 
 		if (scalar(@tmp) > 1) {
-			$in{'messages'} = "Есть небольшая проблема - контактов <b>$in{'contact'}</b> в базе несколько штук.";
+			$in{'messages'} = "Есть небольшая проблема - в базе несколько контактов <b>$in{'contact'}</b>.";
 		}
 		elsif (scalar(@tmp) == 1) {
 			$in{'messages'} = "Такой контакт <b>$in{'contact'}</b> уже есть в базе.";
