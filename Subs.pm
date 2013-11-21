@@ -2,6 +2,7 @@ package Subs;
 
 use Encode qw(encode);
 use Time::Local;
+use MongoDB;
 
 require Exporter;
 @ISA = qw(Exporter);

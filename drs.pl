@@ -177,8 +177,8 @@ sub prepare_epp_data {
 		}
 		if (exists  $inepp -> {'contacts'} -> {'billing'}) {
 			if ($in{'contacts_billing'} ne $inepp -> {'contacts'} -> {'billing'}) {
-				$domain_sceleton -> {'add'} -> {'billing'} = $in{'contacts_billing'};
-				$domain_sceleton -> {'rem'} -> {'billing'} = $inepp -> {'contacts'} -> {'billing'};
+				$domain_sceleton -> {'add'} -> {'contacts'} -> {'billing'} = $in{'contacts_billing'};
+				$domain_sceleton -> {'rem'} -> {'contacts'} -> {'billing'} = $inepp -> {'contacts'} -> {'billing'};
 			}
 		}
 	}
@@ -1880,10 +1880,10 @@ sub contact_edit {
 	}
 
 	# load template for add/edit contact
-	$type = &load_tempfile('file' => $tmpl{'contact_type'});
+	$type = &load_tempfile('file' => $tmpl{'contacts_type'});
 
 	# load template for add/edit contact
-	$line = &load_tempfile('file' => $tmpl{'contact_line'});
+	$line = &load_tempfile('file' => $tmpl{'contacts_line'});
 
 	# Prepare radio button for users
 	foreach (keys %user_types) {
@@ -2544,9 +2544,7 @@ sub action_log {
 	$data = shift;
 	$error = shift;
 
-	unless ($data || $name) {
-		return;
-	}
+	unless ($data || $name) { return; }
 
 	$srting = {
 		'time'	=> time(),

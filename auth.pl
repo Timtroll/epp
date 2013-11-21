@@ -94,9 +94,14 @@ sub load_users {
 	my ($client, $db, $collections, @data);
 
 	# Read list of domains
-	$client = MongoDB::Connection->new(host => $conf{'db_link'});
+	$client = MongoDB::Connection->new(
+		host		=> $conf{'mongohost'},
+		query_timeout	=> 1000,
+		username	=> $conf{'mongouser'},
+		password	=> $conf{'mongopass'}
+	);
 	$db = $client->get_database( $conf{'database'} );
-	$collections = $db->get_collection( $collection{'users'} );
+	$collections = $db->get_collection( $collection{'contacts'} );
 
 	@data = $collections->find()->all;
 	%pass = ();
