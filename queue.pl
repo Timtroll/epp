@@ -15,6 +15,13 @@ use Time::Local;
 
 use Data::Dumper;
 
+BEGIN {
+	IO::Socket::SSL::set_ctx_defaults(
+		'SSL_verify_mode' => 0 #'SSL_VERIFY_NONE'
+        );
+	$ENV{PERL_LWP_SSL_VERIFY_HOSTNAME} = '0';
+};
+
 print "Content-type: text/html; charset = utf-8\nPragma: no-cache\n\n";
 
 our (%conf, %collection, %months, %week, %in, %tmpl, %mesg, %domain_mail, %command_epp, %commands, %menu_line);
@@ -116,7 +123,12 @@ sub connect {
 	unless ($col) { $col = $collection{'domains'}; }
 
 	# Read list of domains
-	$client = MongoDB::Connection -> new(host => $conf{'db_link'});
+	$client = MongoDB::Connection -> new(
+		host		=> $conf{'mongohost'},
+		query_timeout	=> 1000,
+		username	=> $conf{'mongouser'},
+		password	=> $conf{'mongopass'}
+	);
 	$db = $client -> get_database( $base );
 	$collections = $db->get_collection( $col );
 
