@@ -1,98 +1,166 @@
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<html xmlns="http://www.w3.org/1999/xhtml">
-<head>
-<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-<title>Untitled Document</title>
-</head>
-<body>
-<link href="http://localhost/domain/css/style.css" rel="stylesheet" type="text/css" />
-<style>
-html, body {
-	width: 100%;
-	height: 100%; 
-	font-family: Verdana, Arial, Helvetica, sans-serif;
-	font-size: 14px;
-	margin: 0;
-	padding: 0;
-}
-th {
-	height: 30px;
-	width: 2%;
-	text-align: center;
-	font-size: 12px;
-	text-style: normal;
-	font-family: Verdana, Arial, Helvetica, sans-serif;
-}
-iframe {
-	background-image: url(http://localhost/domain/css/spiner.gif);
-	background-position: center;
-	background-repeat: no-repeat;
-}
-</style>
-<script language="JavaScript" src="http://localhost/domain/css/country.js" type="text/javascript"></script>
-<table width="100%" border="0" cellpadding="2" cellspacing="2" onclick="javascript:CloseCon();">
+<link href="<%public_css%>/style.css" rel="stylesheet" type="text/css" />
+<script language="JavaScript" src="<%public_css%>/country.js" type="text/javascript"></script>
+<form action="<%public_cgi%>" method="post" name="contact_form" id="contact_form">
+<table width="100%" border="0" cellspacing="0" cellpadding="4">
   <tr>
-    <td>Country:</td>
-    <td><table width="100%" border="0" cellpadding="2" cellspacing="2">
+    <td><table width="30%" border="0" align="left" cellpadding="0" cellspacing="0">
         <tr>
-          <td width="5%"><input class="wdth" name="cc" id="cc" type="text" size="4" maxlength="2" onkeyup="javascript:chkChar(this);Country();"/></td>
-          <td width="1">&nbsp;</td>
-          <td><div id="countr_none">Латинская аббревиатура (например RU)</div>
-              <div id="country" class="country"></div></td>
+          <td><table width="100%" border="0" cellpadding="2" cellspacing="2" style="float:left;">
+              <tr>
+                <td width="30%" height="38">Login</td>
+                <td height="38"><input class="wdth" type="text" name="login" value="<%login%>" /></td>
+              </tr>
+              <tr>
+                <td width="30%">Password</td>
+                <td><input class="wdth" type="password" name="pass" placeholder="Введите новый пароль"/></td>
+              </tr>
+              <tr>
+                <td width="30%">Type</td>
+                <td><input name="usertype" type="radio" id="standard" value="standard" <%standard%> onClick="javascript:total()" />
+                  Standard (0 %)</td>
+              </tr>
+              <tr>
+                <td>&nbsp;</td>
+                <td><input name="usertype" type="radio" id="reseller" value="reseller" <%reseller%> onClick="javascript:total()" />
+                  Reseller (10%)</td>
+              </tr>
+              <tr>
+                <td>&nbsp;</td>
+                <td><input name="usertype" type="radio" id="goldreseller" value="goldreseller" <%goldreseller%> onClick="javascript:total()" />
+                  Gold reseller (15%)</td>
+              </tr>
+              <%admin%>
+              <tr>
+                <td>Discount</td>
+                <td><span id="discont">- <%discount%> %</span></td>
+              </tr>
+              <tr>
+                <td>&nbsp;</td>
+                <td>&nbsp;</td>
+              </tr>
+            </table></td>
+        </tr>
+        <tr>
+          <td><table width="100%" border="0" cellpadding="2" cellspacing="2">
+              <tr>
+                <td class="prop">AutoRenew</td>
+                <td width="20%" align="right"><input type="checkbox" name="autorenew" id="autorenew" value="1" <%autorenew%> onClick="javascript:total()"/></td>
+              </tr>
+              <tr>
+                <td width="50%" class="prop">Email Notification </td>
+                <td width="20%" align="right"><input type="checkbox" name="notification" id="notification" value="1" <%notification%> onClick="javascript:total()"/></td>
+              </tr>
+              <tr>
+                <td width="50%" class="prop">Allow transfer </td>
+                <td width="20%" align="right"><input type="checkbox" name="transfer" id="transfer" value="1" <%transfer%> onClick="javascript:total()"/></td>
+              </tr>
+              <tr>
+                <td width="50%" class="prop">Prohibiting domains </td>
+                <td width="20%" align="right"><input type="checkbox" name="prohibit" id="prohibit" value="1" <%prohibit%> onClick="javascript:total()"/></td>
+              </tr>
+              <tr>
+                <td class="prop">Changing NS-servers </td>
+                <td width="20%" align="right"><input type="checkbox" name="nschanging" id="nschanging" value="1" <%nschanging%> onClick="javascript:total()"/></td>
+              </tr>
+            </table></td>
         </tr>
       </table>
-        <div class="country-none" id="countr_list"></div></td>
+      <table width="65%" border="0" align="right" cellpadding="2" cellspacing="2">
+        <tr>
+          <td>Country:</td>
+          <td><table width="100%" border="0" cellpadding="2" cellspacing="2">
+              <tr>
+                <td width="6%"><input class="wdth" name="cc" id="cc" value="<%cc%>" type="text" size="4" maxlength="2" onKeyUp="javascript:chkChar(this);Country();"/></td>
+                <td width="1">&nbsp;</td>
+                <td><div id="countr_none">Латинская аббревиатура (например RU)</div>
+                  <div id="country" class="country"></div></td>
+              </tr>
+            </table>
+            <div class="country-none" id="countr_list"></div></td>
+        </tr>
+        <tr>
+          <td width="20%">Name:</td>
+          <td width="80%"><input class="wdth" type="text" name="name" value="<%name%>" /></td>
+        </tr>
+        <tr>
+          <td width="20%">Org:</td>
+          <td width="80%"><input class="wdth" type="text" name="org" value="<%org%>" /></td>
+        </tr>
+        <tr>
+          <td>Id:</td>
+          <td class="prop"><%id%></td>
+        </tr>
+        <tr>
+          <td width="20%">Email:</td>
+          <td width="80%"><input class="wdth" type="text" name="email" value="<%email%>" /></td>
+        </tr>
+        <tr>
+          <td width="20%">Voice:</td>
+          <td width="80%"><input class="wdth" type="text" name="voice" value="<%voice%>" /></td>
+        </tr>
+        <tr>
+          <td width="20%">Fax</td>
+          <td width="80%"><input class="wdth" type="text" name="fax" value="<%fax%>" /></td>
+        </tr>
+        <tr>
+          <td>&nbsp;</td>
+          <td>&nbsp;</td>
+        </tr>
+        <tr>
+          <td width="20%">Postal code:</td>
+          <td width="80%"><input class="wdth" type="text" name="pc" value="<%pc%>" /></td>
+        </tr>
+        <tr>
+          <td width="20%">State/Province:</td>
+          <td width="80%"><input class="wdth" type="text" name="sp" value="<%sp%>" /></td>
+        </tr>
+        <tr>
+          <td width="20%">City:</td>
+          <td width="80%"><input class="wdth" type="text" name="city" value="<%city%>" /></td>
+        </tr>
+        <tr>
+          <td width="20%">Street:</td>
+          <td width="80%"><input class="wdth" type="text" name="street" value="<%street%>" /></td>
+        </tr>
+      </table></td>
   </tr>
- <tbody>
   <tr>
-   <td width="15%">ID:</td>
-   <td width="85%"><input class="wdth" type="text" name="clID" /></td>
-   </tr>
-  <tr>
-   <td width="15%">Name:</td>
-   <td width="85%"><input class="wdth" type="text" name="name" /></td>
-   </tr>
-  <tr>
-   <td width="15%">Org:</td>
-   <td width="85%"><input class="wdth" type="text" name="org" /></td>
-   </tr>
-  <tr>
-   <td width="15%">Email:</td>
-   <td width="85%"><input class="wdth" type="text" name="email" /></td>
-   </tr>
-  <tr>
-   <td width="15%">Voice:</td>
-   <td width="85%"><input class="wdth" type="text" name="voice" /></td>
-   </tr>
-  <tr>
-   <td width="15%">Fax</td>
-   <td width="85%"><input class="wdth" type="text" name="fax" /></td>
-   </tr>
-  <tr>
-    <td width="15%">Postal code:</td>
-    <td width="85%"><input class="wdth" type="text" name="pc" /></td>
-    </tr>
-  <tr>
-    <td width="15%">State/Province:</td>
-    <td width="85%"><input class="wdth" type="text" name="sp" /></td>
-    </tr>
-  <tr>
-    <td width="15%">City:</td>
-    <td width="85%"><input class="wdth" type="text" name="city" /></td>
-    </tr>
-  <tr>
-    <td width="15%">Street:</td>
-    <td width="85%"><textarea name="street" rows="3" cols="40" class="wdth"></textarea></td>
-    </tr>
-  <tr>
-    <td width="15%">Close information</td>
-    <td width="85%"><input type="checkbox" name="disclose" value="1" /></td>
-    </tr>
-  <tr>
-    <td>&nbsp;</td>
-    <td>&nbsp;</td>
+    <td><table width="30%" border="0" align="left" cellpadding="2" cellspacing="2">
+        <tr>
+          <td class="prop"><em>Monthly payment</em>:</td>
+          <td align="right"><em><strong><span id="total"></span></strong></em></td>
+        </tr>
+      </table>
+      <table width="65%" border="0" align="right" cellpadding="0" cellspacing="0">
+        <tr>
+          <td><%commands%></td>
+        </tr>
+      </table></td>
   </tr>
- </tbody>
 </table>
-</body>
-</html>
+</form>
+<script language="JavaScript" type="text/javascript">
+total();
+function total () {
+	var total = 0;
+	if (document.getElementById('standard').checked) {
+		document.getElementById('discont').innerHTML = "&nbsp;0 %";
+	}
+	else if (document.getElementById('reseller').checked) {
+		document.getElementById('discont').innerHTML = "-10 %";
+		total = total + 1000;
+	}
+	else if (document.getElementById('goldreseller').checked) {
+		document.getElementById('discont').innerHTML = "-15 %";
+		total = total + 5000;
+	}
+
+	if (document.getElementById('autorenew').checked) { total = total + (document.getElementById('autorenew').value * 1); }
+	if (document.getElementById('notification').checked) { total = total + (document.getElementById('notification').value * 1); }
+	if (document.getElementById('transfer').checked) { total = total + (document.getElementById('transfer').value * 1); }
+	if (document.getElementById('prohibit').checked) { total = total + (document.getElementById('prohibit').value * 1); }
+	if (document.getElementById('nschanging').checked) { total = total + (document.getElementById('nschanging').value * 1); }
+
+	document.getElementById('total').innerHTML = total + ".00 грн.";
+}
+</script>

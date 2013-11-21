@@ -22,7 +22,7 @@ BEGIN {
 	$ENV{PERL_LWP_SSL_VERIFY_HOSTNAME} = '0';
 };
 
-our (%conf, %collection, %months, %week, %in, %tmpl, %mesg, %domain_mail, %command_epp, %commands, %commandsc, %menu_line, %statuses, %disabled);
+our (%conf, %collection, %months, %week, %in, %tmpl, %mesg, %domain_mail, %command_epp, %commands, %commandsc, %menu_line, %statuses, %disabled, %incontact, %user_types);
 our (@week, @sceleton);
 our ($domain_sceleton, $domain_info);
 
@@ -39,8 +39,9 @@ print "Content-type: text/html; charset = utf-8\nPragma: no-cache\n\n";
 $CGI::POST_MAX = 16384;
 
 &read_param();
+&check_login();
 if ($in{'query_domain'})	{ &query_domain(&connect($conf{'database'}, $collection{'domains'})); }
-elsif ($in{'contact_edit'})	{ &contact_edit(&connect($conf{'database'}, $collection{'cantacts'})); }
+elsif ($in{'query_contact'})	{ &contact_edit(&connect($conf{'database'}, $collection{'cantacts'}), 'edit'); }
 elsif ($in{'send_request'})	{ &send_request(&connect($conf{'database'}, $collection{'domains'})); }
 elsif ($in{'list_domains'})	{ &list_domains(&connect($conf{'database'}, $collection{'domains'}), &connect($conf{'database'}, $collection{'zones'})); }
 # elsif ($in{'list_waiting'})	{ $in{'type_list'} = 'waiting'; &list_domains(&connect($conf{'database'}, $collection{'domains'})); }
@@ -61,8 +62,14 @@ elsif ($in{'domain_auth'})	{ &domain_auth(&connect($conf{'database'}, $collectio
 elsif ($in{'domain_log'})	{ &domain_log(&connect($conf{'database'}, $collection{'log_actions'})); }
 elsif ($in{'contact_save'})	{ &contact_save(&connect($conf{'database'}, $collection{'contacts'})); }
 elsif ($in{'contact_update'})	{ &contact_update(&connect($conf{'database'}, $collection{'contacts'})); }
-elsif ($in{'contact_edit'})	{ &contact_edit(&connect($conf{'database'}, $collection{'contacts'})); }
+elsif ($in{'pref'})		{ &contact_edit(&connect($conf{'database'}, $collection{'contacts'}), 'edit'); }
+elsif ($in{'contact_edit'})	{ &contact_edit(&connect($conf{'database'}, $collection{'contacts'}), 'edit'); }
+elsif ($in{'contact_add'})	{ &contact_edit(&connect($conf{'database'}, $collection{'contacts'}), 'add'); }
 else				{ &main('title' => 'Стартовая'); }
+
+sub check_login {
+	$in{'id'} = 'trol-cunic';
+}
 
 sub prepare_epp_data_contact {
 	my ($inepp, $tmp, $key, $cnt, @add, @rem, @addstat, @remstat, %tmp, %ns);
@@ -192,7 +199,14 @@ sub contact_update {
 		$out{'messages'} .= "В базе несколько записей о контакте $in{'id'}";
 	}
 
-	# check domain & get donain info
+	# check exists changes
+foreach (keys %incontact) {
+	if (/admin/) {
+		print "<li>$_ : $in{$_}</li>";
+	}
+}
+exit;
+	# check contact & get contact info
 	($info, $mess) = &chck_contact();
 
 	# Prepare params data for sending
@@ -456,7 +470,7 @@ sub contact_save {
 	$epp = &connect_epp();
 
 	# get information about new domain
-	$info = $epp->contact_info($in{'contact'});
+	$info = $epp->contact_info($in{'id'});
 
 	# check response errors
 	&check_response($info, 2001);
@@ -465,7 +479,7 @@ sub contact_save {
 		# Convert response to UTF8
 		$info = &obj2utf($info);
 
-# print $in{'contact'}, "<br>", $Net::EPP::Simple::Code;
+# print $in{'id'}, "<br>", $Net::EPP::Simple::Code;
 # print Dumper($info);
 # exit;
 		# Add required fields
@@ -474,7 +488,7 @@ sub contact_save {
 		$info->{'discount'} = '2';
 
 		# Find domain in database
-		$tmp = $collections->find({'id' => $in{'contact'}})->count;
+		$tmp = $collections->find({'id' => $in{'id'}})->count;
 
 		# Add new domain to database if it not exists or udate it
 		unless ($tmp) {
@@ -484,7 +498,7 @@ sub contact_save {
 			$collections->update( $info );
 		}
 		else {
-			$in{'messages'} .= "Есть дубликаты контакта $in{'contact'}";
+			$in{'messages'} .= "Есть дубликаты контакта $in{'id'}";
 		}
 		
 		$html = &info_table($info);
@@ -1338,7 +1352,7 @@ sub domain_info {
 		delete($commands{'Add'});
 		delete($commands{'Transfer'});
 	}
-	$comm = &create_command_list(\%commands);
+	$comm = &create_command_list(\%commands, {});
 
 	if ($in{'frame'}) {
 		$html = &load_tempfile('file' => $tmpl{'frame'});
@@ -1385,15 +1399,15 @@ sub list_contacts {
 		%comm = (
 			'info'		=> &create_command('Edit',
 						'contact_edit'=> 1,
-						'name'		=> $data[$_]->{'name'}
+						'id'		=> $data[$_]->{'id'}
 					),
 			'suspend'	=> &create_command('Suspend',
 						'contact_suspend'=> 1,
-						'name'		=> $data[$_]->{'name'}
+						'id'		=> $data[$_]->{'id'}
 					),
 			'delete'	=> &create_command('Delete',
 						'contact_delete'	=> 1,
-						'name'		=> $data[$_]->{'name'}
+						'id'		=> $data[$_]->{'id'}
 					)
 		);
 
@@ -1792,52 +1806,150 @@ exit;
 }
 
 sub contact_edit {
-	my ($collections, $mess, $data, $out, $html, $comm, @tmp);
+	my ($collections, $mess, $data, $out, $html, $comm, $flag, $type, $line, @tmp);
 	$collections = shift;
+	$flag = shift;
 
 	# check domain in the base
-	if ($in{'contact'}) {
-		# Check exists domains
-		@tmp = $collections->find( { 'id' => $in{'contact'} } )->all;
+	if ($flag eq 'edit') {
+		if ($in{'id'}) {
+			# Check exists domains
+			@tmp = $collections->find( { 'id' => $in{'id'} } )->all;
 
-		if (scalar(@tmp) > 1) {
-			$in{'messages'} = "Есть небольшая проблема - в базе несколько контактов <b>$in{'contact'}</b>.";
-		}
-		elsif (scalar(@tmp) == 1) {
-			$in{'messages'} = "Такой контакт <b>$in{'contact'}</b> уже есть в базе.";
-			$data = $tmp[0];
+			if (scalar(@tmp) > 1) {
+				$in{'messages'} = "Есть небольшая проблема - в базе несколько контактов <b>$in{'id'}</b>.";
+			}
+			elsif (scalar(@tmp) == 1) {
+				if ($flag eq 'add') {
+					$in{'messages'} = "Такой контакт <b>$in{'id'}</b> уже есть в базе.";
+				}
+				$data = $tmp[0];
+			}
+			else {
+				$data = '';
+			}
 		}
 		else {
-			$data = '';
+			&main(
+				'messages' => $mesg{'empty_contact'}
+			);
 		}
+		unless ($in{'messages'}) {
+			$data = &chck_contact();
+		}
+
+		foreach (keys %incontact) {
+			# create data for checkboxes
+			if (/^(autorenew|notification|transfer|prohibit|nschanging)/) {
+				if ($in{$_}) { $incontact{$_} = 'checked="checked"'; }
+				else {
+					if ($tmp[0]->{'package'}->{$_}) { $incontact{$_} = 'checked="checked"'; }
+				}
+			}
+			# create data for radio
+			elsif (/usertype/) {
+				if ($in{$_}) { $incontact{$in{$_}} = 'checked="checked"'; }
+				elsif ($in{$_}) { $incontact{$tmp[0]->{$_}} = 'checked="checked"'; }
+			}
+			# create data for inputes
+			else {
+				unless ($in{$_}) {
+					if (/^(email|voice|fax)/) { $incontact{$_} = $tmp[0]->{$_}; }
+					elsif (/^(org|name)/) { $incontact{$_} = $tmp[0]->{'postalInfo'}->{'loc'}->{$_}; }
+					elsif (/^(sp|city|pc)/) { $incontact{$_} = $tmp[0]->{'postalInfo'}->{'loc'}->{'addr'}->{$_}; }
+					elsif (/^cc/) { $incontact{$_} = uc($tmp[0]->{'postalInfo'}->{'loc'}->{'addr'}->{$_}); }
+					elsif (/^street/) { $incontact{$_} = $tmp[0]->{'postalInfo'}->{'loc'}->{'addr'}->{$_}[0]; }
+					elsif (/^discount/) { $incontact{$_} = $tmp[0]->{$_}; }
+					else { $incontact{$_} = $tmp[0]->{$_}; }
+				}
+				else {
+					$incontact{$_} = $in{$_};
+				}
+			}
+		}
+#		$out = &info_table($data, 'edit');
 	}
 	else {
-		&main(
-			'messages' => $mesg{'empty_contact'}
+		$incontact{'discount'} = ' 0';
+		$incontact{'autorenew'} = 1;
+		$incontact{'notification'} = 1;
+		$incontact{'transfer'} = 1;
+		$incontact{'prohibit'} = 1;
+		$incontact{'nschanging'} = 1;
+		$incontact{'standard'} = 'checked="checked"';
+	}
+
+	# load template for add/edit contact
+	$type = &load_tempfile('file' => $tmpl{'contact_type'});
+
+	# load template for add/edit contact
+	$line = &load_tempfile('file' => $tmpl{'contact_line'});
+
+	# Prepare radio button for users
+	foreach (keys %user_types) {
+		if ($tmp[0]->{$_}) {
+			if ($tmp[0]->{$_} =~ /^admin$/) {
+#			<input name='usertype' type='radio' id='goldreseller' value='goldreseller' <%goldreseller%> onClick='javascript:total()' />
+			$incontact{'admin'} = "<tr><td>&nbsp;</td><td><input name='usertype' type='radio' id='admin' value='admin' checked='checked' onClick='javascript:total()' /> Admin</td></tr>"; }
+		}
+		else {
+		}
+		$type = &small_parsing(
+			$type,
+			'public_css'	=> $conf{'public_css'},
+			'public_cgi'	=> $conf{'public_cgi'},
+			'type'		=> $type
 		);
 	}
+	$type = &small_parsing(
+		$type,
+		'public_css'	=> $conf{'public_css'},
+		'public_cgi'	=> $conf{'public_cgi'},
+		'discont'	=> $incontact{'discount'},
+		'type'		=> $type
+	);
 
-	unless ($in{'messages'}) {
-		$data = &chck_contact();
-	}
-	
-	$out = &info_table($data, 'edit');
-	$comm = &create_command_list(\%commandsc);
-	$out .= $comm;
+	# Prepare form for add/edit contact
+	$html = &contact_form($data, $flag);
 
+	&main(
+		'path'		=> $mesg{$flag.'_contact'},
+		'content'	=> $html
+	);
+}
+
+sub contact_form {
+	my ($data, $flag, $html, %data, %exceptions);
+	$data = shift;
+	$flag = shift;
+
+	# load template for add/edit contact
 	$html = &load_tempfile('file' => $tmpl{'contact_form'});
 
+	# Create command line
+	%exceptions = (
+		'add'	=> {
+			'Update' => 1
+		},
+		'edit'	=> {
+			'Add' => 1,
+			'Save' => 1
+		}
+	);
+
+	if ($flag eq 'edit') {
+# print Dumper(\%incontact);
+	}
 	$html = &small_parsing(
 		$html,
 		'public_css'	=> $conf{'public_css'},
 		'public_cgi'	=> $conf{'public_cgi'},
-		'contact'	=> $in{'contact'},
-		'info'		=> $out
+		'commands'	=> &create_command_list(\%commandsc, $exceptions{$flag}),
+		'id'		=> $in{'id'},
+		%incontact
 	);
-
-	&main(
-		'content'	=> $html
-	);
+# print 
+	return $html;
 }
 
 sub query_domain {
@@ -2009,10 +2121,10 @@ sub chck_contact {
 	my ($epp, $info);
 
 	# Clear request data
-	$in{'contact'} = lc($in{'contact'});
+	$in{'id'} = lc($in{'id'});
 
 	# Open check page if contact name incorrect
-	unless ($in{'contact'} =~ /^[0-9a-z\-\.]+$/) {
+	unless ($in{'id'} =~ /^[0-9a-z\-\.]+$/) {
 		&main(
 			'title'		=>'Проверка домена',
 			'messages'	=> "Проверьте корректность названия контакта."
@@ -2023,7 +2135,7 @@ sub chck_contact {
 		$epp = &connect_epp();
 
 		# check contact
-		$info = $epp->contact_info($in{'contact'});
+		$info = $epp->contact_info($in{'id'});
 
 		# check response errors
 		&check_response($info, 2001, 2005, 2202);
@@ -2092,12 +2204,15 @@ sub chck_domain {
 }
 
 sub create_command_list {
-	my ($comm, $out, $tmp, @tmp);
+	my ($comm, $out, $tmp, $exceptions, @tmp);
 	$comm = shift;
+	$exceptions = shift;
 
 	$out = &load_tempfile('file' => $tmpl{'commands'});
 	foreach (sort {$b cmp $a} keys %{$comm}) {
-		unshift @tmp, "<input class='sbmt' type='submit' value='$_' name='$$comm{$_}'>";
+		unless (exists $$exceptions{$_}) {
+			unshift @tmp, "<input class='sbmt' type='submit' value='$_' name='$$comm{$_}'>";
+		}
 	}
 	$out = &small_parsing(
 		$out,
@@ -2224,6 +2339,18 @@ sub read_param {
 			}
 		}
 #		print "<li>$_ = $in{$_}</li>";
+	}
+
+	# read fields for contact
+	foreach (keys %incontact) {
+		unless ($in{$_}) {
+			if (param($_)) {
+				$in{$_} = param($_);
+			}
+			else {
+				$in{$_} = '';
+			}
+		}
 	}
 
 	# read fields for domain commands
@@ -2398,7 +2525,13 @@ sub connect {
 	unless ($col) { $col = $collection{'domains'}; }
 
 	# Read list of domains
-	$client = MongoDB::Connection->new(host => $conf{'db_link'});
+	$client = MongoDB::Connection->new(
+		host		=> $conf{'mongohost'},
+		query_timeout	=> 1000,
+		username	=> $conf{'mongouser'},
+		password	=> $conf{'mongopass'}
+		
+	);
 	$db = $client->get_database( $base );
 	$collections = $db->get_collection( $col);
 

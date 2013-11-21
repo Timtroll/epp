@@ -253,9 +253,9 @@ function Country () {
 
 	var flag = 0;
 	var countr = ' ';
-	var cc = window.document.getElementById('addr_cc').value;
+	var cc = window.document.getElementById('cc').value;
 	var kcc = cc.toUpperCase();
-	window.document.getElementById('addr_cc').value = kcc;
+	window.document.getElementById('cc').value = kcc;
 	for(var key in country) {
 		var kkey = key.toUpperCase();
 		if (kkey == kcc) {
@@ -300,7 +300,7 @@ function chkChar(obj) {
 }
 
 function SelCountry(con) {
-	window.document.getElementById('addr_cc').value = con.toUpperCase();
+	window.document.getElementById('cc').value = con.toUpperCase();
 	Country();
 }
 

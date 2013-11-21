@@ -180,6 +180,10 @@ span:hover {
     padding: 5px;
 }
 
+.prop {
+	height:36px;
+}
+
 .info {
     padding: 6px;
     background-color: #FAFAFA;
