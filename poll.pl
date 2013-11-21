@@ -18,6 +18,13 @@ use MongoDB;
 use Data::Dumper;
 use Time::Local;
 
+BEGIN {
+	IO::Socket::SSL::set_ctx_defaults(
+		'SSL_verify_mode' => 0 #'SSL_VERIFY_NONE'
+        );
+	$ENV{PERL_LWP_SSL_VERIFY_HOSTNAME} = '0';
+};
+
 our (%conf, %collection, %months, %week, %in, %tmpl, %mesg, %domain_mail, %command_epp, %commands, %menu_line);
 
 use Subs; # qw/sec2date/;
