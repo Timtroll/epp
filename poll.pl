@@ -216,7 +216,12 @@ sub connect {
 	unless ($col) { $col = $collection{'domains'}; }
 
 	# Read list of domains
-	$client = MongoDB::Connection -> new( host => $conf{'db_link'} );
+	$client = MongoDB::Connection -> new(
+		host		=> $conf{'mongohost'},
+		query_timeout	=> 1000,
+		username	=> $conf{'mongouser'},
+		password	=> $conf{'mongopass'}
+	);
 	$db = $client -> get_database( $base );
 	$collections = $db->get_collection( $col );
 

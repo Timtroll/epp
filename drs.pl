@@ -2530,7 +2530,6 @@ sub connect {
 		query_timeout	=> 1000,
 		username	=> $conf{'mongouser'},
 		password	=> $conf{'mongopass'}
-		
 	);
 	$db = $client->get_database( $base );
 	$collections = $db->get_collection( $col);
