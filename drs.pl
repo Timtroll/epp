@@ -22,9 +22,9 @@ BEGIN {
 	$ENV{PERL_LWP_SSL_VERIFY_HOSTNAME} = '0';
 };
 
-our (%conf, %collection, %months, %week, %in, %tmpl, %mesg, %domain_mail, %command_epp, %commands, %commandsc, %menu_line, %statuses, %disabled, %incontact, %user_types);
+our (%conf, %collection, %months, %week, %in, %tmpl, %mesg, %domain_mail, %command_epp, %commands, %commandsc, %menu_line, %statuses, %disabled, %user_types);
 our (@week, @sceleton);
-our ($domain_sceleton, $domain_info);
+our ($domain_sceleton, $domain_info, $contact_info);
 
 use Subs;
 require "drs.pm";
@@ -50,7 +50,7 @@ elsif ($in{'list_contacts'})	{ &list_contacts(&connect($conf{'database'}, $colle
 elsif ($in{'list_messages'})	{ &list_messages(&connect($conf{'database'}, $collection{'messages'})); }
 elsif ($in{'domain_info'})	{ &domain_info(&connect($conf{'database'}, $collection{'domains'})); }
 elsif ($in{'calendar'})		{ &calendar(&connect($conf{'database'}, $collection{'domains'}), &connect($conf{'database'}, $collection{'zones'})); }
-elsif ($in{'price'})		{ &get_price(&connect($conf{'database'}, $collection{'zones'})); }
+elsif ($in{'price'})		{ &get_price(&connect($conf{'database'}, $collection{'zones'}), 0); }
 elsif ($in{'get_price'})	{ &get_price(&connect($conf{'database'}, $collection{'zones'}), 1); }
 elsif ($in{'message_read'})	{ &message_read(&connect($conf{'database'}, $collection{'messages'})); }
 elsif ($in{'domain_create'})	{ &domain_create(&connect($conf{'database'}, $collection{'domains'})); }
@@ -187,24 +187,41 @@ sub prepare_epp_data {
 }
 
 sub contact_update {
-	my ($html, $info, $mess, $collections, $epp, $update, @tmp, @temp, @ns, %tmp, %out);
+	my ($html, $info, $mess, $collections, $epp, $update, @tmp, @temp, @ns, @necessarily, %tmp, %out);
 	$collections = shift;
 
-	# Find and Update domain status to 'updating' in the base
-	@temp = $collections->find( { 'id' => $in{'id'} } )->all;
-	unless (scalar(@temp)) {
-		$out{'messages'} .= "В базе нет записи о контакте $in{'id'}";
+	unless ($in{'new'}) {
+		&main( 'content' => $mesg{'new'} );
 	}
-	if (scalar(@temp) > 1) {
-		$out{'messages'} .= "В базе несколько записей о контакте $in{'id'}";
+	if ($in{'new'} eq 'new') {
+		@necessarily = ['new', 'email', 'voice', 'cc', 'city', 'sp', 'name', 'type'];
+		# check exists necessarily values
+		if (($in{'new'} eq 'new')&&($in{'pass'} eq '')) { $in{'messages'} .= "$mesg{'pass'}<br>"; }
+		if (($in{'new'} eq 'new')&&($in{'login'} eq '')) { $in{'messages'} .= "$mesg{'login'}<br>"; }
+	}
+	else {
+		# Find and Update domain status to 'updating' in the base
+		@temp = $collections->find( { 'id' => $in{'id'} } )->all;
+		unless (scalar(@temp)) {
+			$in{'messages'} .= "В базе нет записи о контакте $in{'id'}";
+		}
+		if (scalar(@temp) > 1) {
+			$in{'messages'} .= "В базе несколько записей о контакте $in{'id'}";
+		}
 	}
 
-	# check exists changes
-foreach (keys %incontact) {
-	if (/admin/) {
-		print "<li>$_ : $in{$_}</li>";
+	# check exists necessarily values
+	@necessarily = ('email', 'voice', 'cc', 'city', 'sp', 'name', 'usertype', 'street');
+	foreach (@necessarily) {
+		unless ($in{$_}) {
+print "$_";
+			$in{'messages'} .= "$mesg{$_}<br>";
+		}
 	}
-}
+
+
+print "$in{'messages'}<hr>";
+&contact_edit($collections, 'edit');
 exit;
 	# check contact & get contact info
 	($info, $mess) = &chck_contact();
@@ -971,7 +988,9 @@ sub get_price {
 				@tmp = split('</td><td>', $string);
 				$key = shift @tmp;
 				$key =~ s/<.*>//;
+				if ($key =~ /\*/) { next; }
 				$tmp[$#tmp] =~ s/<.*>//;
+				map { $_ = (($_*100)/100); } (@tmp);
 
 				# Check & compare price value, if new zone not exists insert them
 				if (exists $data{$key}) {
@@ -979,6 +998,7 @@ sub get_price {
 						$connect->update( { '_id' => $data{$key}->{'_id'} }, { '$set' => { 'price' => [ @tmp ] } } );
 						$changed{$key} = int(($data{$key}->{'price'}[1] - $tmp[1])*100 + 5)/100;
 						$data{$key}->{'price'} = \@tmp;
+						delete($data{$key}->{'_id'});
 					}
 				}
 				else {
@@ -995,7 +1015,11 @@ sub get_price {
 	$content = "<table width='100%'><tr>";
 	map { if ($_) { $content .= "<td><b>$_<b></td>"; } else { $content .= "<td></td>"; }} ('Доменная зона', '', '0 %', '7 %', '10 %', '12 %', '15 %', '17 %');
 	$content .= '</tr>';
+
 	foreach $key (sort {$a cmp $b} keys %data) {
+		# skip cirilic zone
+		if ($key =~ /\*/) { next; }
+
 		$content .= '<tr>';
 		$content .= "<td><i>$key</i></td><td class='overdue'>";
 		if (exists $changed{$key}) {
@@ -1420,6 +1444,7 @@ sub list_contacts {
 			'public_cgi'	=> $conf{'public_cgi'},
 #			'name'		=> &create_command($data[$_]->{'id'}, 'class' => 'dom'),
 			'name'		=> $data[$_]->{'id'},
+			'status'	=> $data[$_]->{'usertype'},
 			'class'		=> $class,
 			'expires'	=> $data[$_]->{'expires'},
 			%comm
@@ -1806,107 +1831,122 @@ exit;
 }
 
 sub contact_edit {
-	my ($collections, $mess, $data, $out, $html, $comm, $flag, $type, $line, @tmp);
+	my ($collections, $mess, $data, $tmp, $out, $html, $flag, $type, $line, @tmp);
 	$collections = shift;
 	$flag = shift;
 
 	# check domain in the base
 	if ($flag eq 'edit') {
-		if ($in{'id'}) {
-			# Check exists domains
-			@tmp = $collections->find( { 'id' => $in{'id'} } )->all;
+		if ($in{'pref'}) {
+			if ($in{'id'}) {
+				# Check exists domains
+				@tmp = $collections->find( { 'id' => $in{'id'} } )->all;
 
-			if (scalar(@tmp) > 1) {
-				$in{'messages'} = "Есть небольшая проблема - в базе несколько контактов <b>$in{'id'}</b>.";
-			}
-			elsif (scalar(@tmp) == 1) {
-				if ($flag eq 'add') {
-					$in{'messages'} = "Такой контакт <b>$in{'id'}</b> уже есть в базе.";
+				if (scalar(@tmp) > 1) {
+					$in{'messages'} .= "Есть небольшая проблема - в базе несколько контактов <b>$in{'id'}</b>.";
 				}
-				$data = $tmp[0];
+				elsif (scalar(@tmp) == 1) {
+					if ($flag eq 'add') {
+						$in{'messages'} .= "Такой контакт <b>$in{'id'}</b> уже есть в базе.";
+					}
+					unless ($tmp[0]->{'usertype'}) {
+						&main( 'messages' => $mesg{'empty_contact_type'} );
+					}
+					unless (exists $user_types{$tmp[0]->{'usertype'}}) {
+						&main( 'messages' => $mesg{'unknown_contact_type'} );
+					}
+					$data = $tmp[0];
+				}
+				else { $data = ''; }
 			}
 			else {
-				$data = '';
+				&main( 'messages' => $mesg{'empty_contact'} );
 			}
-		}
-		else {
-			&main(
-				'messages' => $mesg{'empty_contact'}
-			);
-		}
-		unless ($in{'messages'}) {
-			$data = &chck_contact();
+
+			unless ($in{'messages'}) {
+				$data = &chck_contact();
+			}
 		}
 
-		foreach (keys %incontact) {
+		foreach (keys %in) {
 			# create data for checkboxes
 			if (/^(autorenew|notification|transfer|prohibit|nschanging)/) {
-				if ($in{$_}) { $incontact{$_} = 'checked="checked"'; }
+				if ($in{$_}) { $in{$_} = 'checked="checked"'; }
 				else {
-					if ($tmp[0]->{'package'}->{$_}) { $incontact{$_} = 'checked="checked"'; }
+					if ($tmp[0]->{'package'}->{$_}) { $in{$_} = 'checked="checked"'; }
 				}
-			}
-			# create data for radio
-			elsif (/usertype/) {
-				if ($in{$_}) { $incontact{$in{$_}} = 'checked="checked"'; }
-				elsif ($in{$_}) { $incontact{$tmp[0]->{$_}} = 'checked="checked"'; }
 			}
 			# create data for inputes
 			else {
 				unless ($in{$_}) {
-					if (/^(email|voice|fax)/) { $incontact{$_} = $tmp[0]->{$_}; }
-					elsif (/^(org|name)/) { $incontact{$_} = $tmp[0]->{'postalInfo'}->{'loc'}->{$_}; }
-					elsif (/^(sp|city|pc)/) { $incontact{$_} = $tmp[0]->{'postalInfo'}->{'loc'}->{'addr'}->{$_}; }
-					elsif (/^cc/) { $incontact{$_} = uc($tmp[0]->{'postalInfo'}->{'loc'}->{'addr'}->{$_}); }
-					elsif (/^street/) { $incontact{$_} = $tmp[0]->{'postalInfo'}->{'loc'}->{'addr'}->{$_}[0]; }
-					elsif (/^discount/) { $incontact{$_} = $tmp[0]->{$_}; }
-					else { $incontact{$_} = $tmp[0]->{$_}; }
-				}
-				else {
-					$incontact{$_} = $in{$_};
+					if (/^(email|voice|fax)/) { $in{$_} = $tmp[0]->{$_}; }
+					elsif (/^(org|name)/) { $in{$_} = $tmp[0]->{'postalInfo'}->{'loc'}->{$_}; }
+					elsif (/^(sp|city|pc)/) { $in{$_} = $tmp[0]->{'postalInfo'}->{'loc'}->{'addr'}->{$_}; }
+					elsif (/^cc/) { $in{$_} = uc($tmp[0]->{'postalInfo'}->{'loc'}->{'addr'}->{$_}); }
+					elsif (/^street/) { $in{$_} = $tmp[0]->{'postalInfo'}->{'loc'}->{'addr'}->{$_}[0]; }
+					elsif (/^discount/) { $in{$_} = $tmp[0]->{$_}; }
+					else { $in{$_} = $tmp[0]->{$_}; }
 				}
 			}
 		}
-#		$out = &info_table($data, 'edit');
+		$in{'new'} = 'old';
 	}
 	else {
-		$incontact{'discount'} = ' 0';
-		$incontact{'autorenew'} = 1;
-		$incontact{'notification'} = 1;
-		$incontact{'transfer'} = 1;
-		$incontact{'prohibit'} = 1;
-		$incontact{'nschanging'} = 1;
-		$incontact{'standard'} = 'checked="checked"';
+		$in{'discount'} = ' 0';
+		$in{'autorenew'} = 1;
+		$in{'notification'} = 1;
+		$in{'transfer'} = 1;
+		$in{'prohibit'} = 1;
+		$in{'nschanging'} = 1;
+		$in{'standard'} = 'checked="checked"';
+		$in{'new'} = 'new';
 	}
-
-	# load template for add/edit contact
-	$type = &load_tempfile('file' => $tmpl{'contacts_type'});
 
 	# load template for add/edit contact
 	$line = &load_tempfile('file' => $tmpl{'contacts_line'});
 
 	# Prepare radio button for users
-	foreach (keys %user_types) {
-		if ($tmp[0]->{$_}) {
-			if ($tmp[0]->{$_} =~ /^admin$/) {
-#			<input name='usertype' type='radio' id='goldreseller' value='goldreseller' <%goldreseller%> onClick='javascript:total()' />
-			$incontact{'admin'} = "<tr><td>&nbsp;</td><td><input name='usertype' type='radio' id='admin' value='admin' checked='checked' onClick='javascript:total()' /> Admin</td></tr>"; }
+	if ($in{'usertype'}) { $tmp = $in{'usertype'}; }
+	else {
+		if ($tmp[0]->{'usertype'}) {
+			$tmp = $tmp[0]->{'usertype'};
 		}
-		else {
+		else { $tmp = 'standard'; }
+	}
+	foreach (@{$user_types{$tmp}->{'types'}}) {
+		if ($tmp eq $_) {
+			$type = 'checked="checked"';
+			$in{'discount'} = $user_types{$_}->{'disc'};
 		}
-		$type = &small_parsing(
-			$type,
+		else { $type = ''; }
+		$html .= &small_parsing(
+			$line,
 			'public_css'	=> $conf{'public_css'},
 			'public_cgi'	=> $conf{'public_cgi'},
-			'type'		=> $type
+			'type'		=> $_,
+			'type_name'	=> $user_types{$_}->{'texts'},
+			'discount'	=> $user_types{$_}->{'disc'},
+			'checked'	=> $type
 		);
 	}
+
+	# load template for add/edit contact
+	$type = &load_tempfile('file' => $tmpl{'contacts_type'});
 	$type = &small_parsing(
 		$type,
 		'public_css'	=> $conf{'public_css'},
 		'public_cgi'	=> $conf{'public_cgi'},
-		'discont'	=> $incontact{'discount'},
-		'type'		=> $type
+		'login'		=> $in{'login'},
+		'discount'	=> $in{'discount'},
+		'type'		=> $html
+	);
+
+	$in{'type'} = &small_parsing(
+		$type,
+		'public_css'	=> $conf{'public_css'},
+		'public_cgi'	=> $conf{'public_cgi'},
+		'discont'	=> $in{'discount'},
+		'type'		=> $type,
 	);
 
 	# Prepare form for add/edit contact
@@ -1914,7 +1954,8 @@ sub contact_edit {
 
 	&main(
 		'path'		=> $mesg{$flag.'_contact'},
-		'content'	=> $html
+		'content'	=> $html,
+		'javascript'	=> "<script src='$conf{'public_css'}/country.js'></script>"
 	);
 }
 
@@ -1937,16 +1978,15 @@ sub contact_form {
 		}
 	);
 
-	if ($flag eq 'edit') {
+#	if ($flag eq 'edit') {
 # print Dumper(\%incontact);
-	}
+#	}
 	$html = &small_parsing(
 		$html,
 		'public_css'	=> $conf{'public_css'},
 		'public_cgi'	=> $conf{'public_cgi'},
 		'commands'	=> &create_command_list(\%commandsc, $exceptions{$flag}),
-		'id'		=> $in{'id'},
-		%incontact
+		%in
 	);
 # print 
 	return $html;
@@ -2319,56 +2359,66 @@ sub put_mail_auth {
 ######## Subs ########
 
 sub read_param {
-	my ($domain, $key, $cnt);
+	my ($domain, $cnt, $key, $kkey, $kkkey);
 
-	foreach (keys %in) {
-		if (param($_)) {
-			if ($_ eq 'store') {
-				$in{$_} = 'on';
-			}
-			else {
-				$in{$_} = param($_);
-			}
-		}
-		else {
-			if ($_ eq 'store') {
-				$in{$_} = 'off';
-			}
-			else {
-				$in{$_} = '';
-			}
-		}
-#		print "<li>$_ = $in{$_}</li>";
-	}
-
-	# read fields for contact
-	foreach (keys %incontact) {
-		unless ($in{$_}) {
-			if (param($_)) {
-				$in{$_} = param($_);
-			}
-			else {
-				$in{$_} = '';
-			}
-		}
-	}
+	map { &read2in($_); } (keys %in);
 
 	# read fields for domain commands
-	foreach (keys %commands) {
+	map {
 		if ($in{$commands{$_}}) {
 			$commands{$_} =~ /domain_(.*)/;
 			$domain = $1;
 			last;
 		}
-	}
+	} (keys %commands);
 	if ($domain) {
 		# Rean fields for object
 		if (@sceleton = split(' ', param('sceleton'))){
-			foreach (@sceleton) {
-				$in{$_} = param($_);
-			}
+			map { &read2in($_); } (@sceleton)
 		}
 	}
+
+	# read fields for contacts
+	foreach $key (keys %{$contact_info}) {
+		if (ref($contact_info->{$key}) eq 'HASH') {
+			foreach $kkey (keys %{$contact_info->{$key}}) {
+				if (ref($contact_info->{$key}->{$kkey}) eq 'HASH') {
+					foreach $kkkey (keys %{$contact_info->{$key}->{$kkey}}) {
+						if (ref($contact_info->{$key}->{$kkey}->{$kkkey}) eq 'HASH') {
+							map { $contact_info->{$key}->{$kkey}->{$kkkey}->{$_} = &read2in($_); } (keys %{$contact_info->{$key}->{$kkey}->{$kkkey}})
+						}
+						else {
+							$contact_info->{$key}->{$kkey}->{$kkkey} = &read2in($kkkey);
+						}
+					}
+				}
+				else {$contact_info->{$key}->{$kkey} =  &read2in($kkey); }
+			}
+		}
+		elsif (ref($contact_info->{$key}) eq 'ARRAY') {
+			if (param($key."_count")) {
+				for ($cnt = 0; $cnt < param($key."_count"); $cnt++) {
+					push @{$contact_info->{$key}}, &read2in($_."");
+					print "$key $_<br>";
+				}
+			}
+		}
+		else {
+			$contact_info->{$key} = &read2in($key);
+		}
+	}
+# print Dumper($contact_info);
+}
+
+sub read2in {
+	my $name = shift;
+
+	if ($name) {
+		if (param($name)) { $in{$name} = param($name); }
+		else { $in{$name} = ''; }
+	}
+
+	return $in{$name};
 }
 
 sub cmp_request {

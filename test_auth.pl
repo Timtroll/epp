@@ -8,6 +8,7 @@ while (1) {
 	$user = join("", @chars[ map{ rand @chars } (0 .. 6) ]);
 	@chars = split('', 'AaBbCcDdEeFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz');
 	$pass = join("", @chars[ map{ rand @chars } (0 .. 6) ]);
+#$url = "http://epp.milion.kiev.ua:666/user=$user\&pass=$pass";
 $url = "http://troll:666/user=$user\&pass=$pass";
 
 print "$url\n";
@@ -15,5 +16,5 @@ print "$url\n";
 
 	die "Couldn't get $url" unless defined $content;
 print "$content\n";
-	sleep((rand()/100));
+	sleep(0.1);
 }
